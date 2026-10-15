@@ -393,7 +393,8 @@ class SpeechController {
 
     /**
      * Smart Speech Evaluator
-     * Understands kids' natural pauses without premature errors or chopped phrases!
+     * Waits until the user FINISHES speaking their full command before acting!
+     * Never interrupts in the middle of sentences like "상자를 책상..." or "인형을 상자..."
      */
     evaluateSpeechInput(candidateText, hasFinalChunk) {
         if (!candidateText || this.isSpeaking) return;
@@ -401,36 +402,57 @@ class SpeechController {
         const intent = window.nluParser ? window.nluParser.parse(candidateText) : null;
         if (!intent) return;
 
-        // 1. High-Confidence Complete Action Commands: Fast execution!
+        // Actionable intents (MOVE, LIGHT, DANCE, etc.)
         const isActionable = [
             'MOVE', 'LIGHT_ON', 'LIGHT_OFF', 'DANCE', 'RESET', 
             'COME', 'PRAISE', 'FINISH_EXPERIENCE', 'GREET'
         ].includes(intent.type);
 
         if (isActionable) {
+            // Case 1: Complete command with an explicit ending verb
+            // (e.g. "상자를 책상으로 옮겨줘", "인형을 상자에 올려줘", "불 켜줘", "신나게 춤춰줘")
+            if (intent.hasEndingVerb) {
+                clearTimeout(this.evalTimer);
+                // When browser speech engine finalized the utterance chunk, wait 280ms
+                // If interim, wait 450ms of quiet pause after speaking the verb
+                const waitTime = hasFinalChunk ? 280 : 450;
+                this.evalTimer = setTimeout(() => {
+                    this.commitCommand(candidateText);
+                }, waitTime);
+                return;
+            }
+
+            // Case 2: Partial noun-only command WITHOUT an ending verb
+            // (e.g. "상자를 책상...", "인형을 상자...", "공을 침대...")
+            // The student is in the middle of speaking! NEVER cut them off!
             clearTimeout(this.evalTimer);
-            // Crisp 180ms debounce to catch any immediate trailing syllable
-            this.evalTimer = setTimeout(() => {
-                this.commitCommand(candidateText);
-            }, 180);
+            if (hasFinalChunk) {
+                // Only if the student completely stopped speaking and stayed silent for a full 1.2s:
+                this.evalTimer = setTimeout(() => {
+                    this.commitCommand(candidateText);
+                }, 1200);
+            }
+            // If still interim, DO NOT schedule premature execution! Wait for the verb!
             return;
         }
 
-        // 2. Wake Word Only ("로봇아!", "로보야!"): Wait 650ms in case the child continues speaking
+        // Case 3: Wake Word ("로보야!", "로봇아!")
         if (intent.type === 'WAKE_WORD') {
             clearTimeout(this.evalTimer);
+            // Wait 800ms to allow multi-part phrases ("로봇아! (pause) 상자 책상에 옮겨줘")
             this.evalTimer = setTimeout(() => {
                 this.commitCommand(candidateText);
-            }, 650);
+            }, 800);
             return;
         }
 
-        // 3. Incomplete / Ambiguous / Unknown ("상자를...", "책상으로...", or unclear speech)
-        // Give the child 900ms to complete their thought before showing hints!
+        // Case 4: Incomplete / Ambiguous / Unknown speech
         clearTimeout(this.evalTimer);
-        this.evalTimer = setTimeout(() => {
-            this.commitCommand(candidateText);
-        }, 900);
+        if (hasFinalChunk) {
+            this.evalTimer = setTimeout(() => {
+                this.commitCommand(candidateText);
+            }, 1200);
+        }
     }
 
     /**

@@ -2,6 +2,7 @@
  * Natural Language Understanding (NLU) Module
  * Interprets voice commands spoken in Korean for child-friendly robot interaction.
  * Short, crisp, and energetic responses with 100% exact matches to audio_cache.
+ * Now features `hasEndingVerb` to wait until the child finishes speaking full sentences!
  */
 class NLUParser {
     constructor() {
@@ -91,7 +92,8 @@ class NLUParser {
             return {
                 type: 'UNKNOWN',
                 rawText: rawInput,
-                reply: '잘 못 들었어요. "상자를 책상으로 옮겨줘"라고 해보세요!'
+                reply: '잘 못 들었어요. "상자를 책상으로 옮겨줘"라고 해보세요!',
+                hasEndingVerb: false
             };
         }
 
@@ -116,7 +118,8 @@ class NLUParser {
                 return {
                     type: 'GREET',
                     rawText: rawInput,
-                    reply: '안녕! 난 도우미 로봇이야. 반가워!'
+                    reply: '안녕! 난 도우미 로봇이야. 반가워!',
+                    hasEndingVerb: true
                 };
             }
         }
@@ -126,7 +129,8 @@ class NLUParser {
             return {
                 type: 'WAKE_WORD',
                 rawText: rawInput,
-                reply: '네! 준비됐어요. 말씀하세요!'
+                reply: '네! 준비됐어요. 말씀하세요!',
+                hasEndingVerb: false
             };
         }
 
@@ -137,7 +141,8 @@ class NLUParser {
             return {
                 type: 'LIGHT_ON',
                 rawText: rawInput,
-                reply: '네! 방 불을 켤게요!'
+                reply: '네! 방 불을 켤게요!',
+                hasEndingVerb: true
             };
         }
 
@@ -147,7 +152,8 @@ class NLUParser {
             return {
                 type: 'LIGHT_OFF',
                 rawText: rawInput,
-                reply: '네! 방 불을 끌게요. 굿나잇!'
+                reply: '네! 방 불을 끌게요. 굿나잇!',
+                hasEndingVerb: true
             };
         }
 
@@ -157,7 +163,8 @@ class NLUParser {
             return {
                 type: 'GREET',
                 rawText: rawInput,
-                reply: '안녕! 난 도우미 로봇이야. 반가워!'
+                reply: '안녕! 난 도우미 로봇이야. 반가워!',
+                hasEndingVerb: true
             };
         }
 
@@ -167,7 +174,8 @@ class NLUParser {
             return {
                 type: 'DANCE',
                 rawText: rawInput,
-                reply: '신나게 춤춰볼게요, 룰루랄라~!'
+                reply: '신나게 춤춰볼게요, 룰루랄라~!',
+                hasEndingVerb: true
             };
         }
 
@@ -178,7 +186,8 @@ class NLUParser {
             return {
                 type: 'PRAISE',
                 rawText: rawInput,
-                reply: '고마워요! 저도 정말 기뻐요!'
+                reply: '고마워요! 저도 정말 기뻐요!',
+                hasEndingVerb: true
             };
         }
 
@@ -188,7 +197,8 @@ class NLUParser {
             return {
                 type: 'INTRO',
                 rawText: rawInput,
-                reply: '난 손이 불편한 친구들을 돕는 AI 도우미 로봇이야!'
+                reply: '난 손이 불편한 친구들을 돕는 AI 도우미 로봇이야!',
+                hasEndingVerb: true
             };
         }
 
@@ -198,7 +208,8 @@ class NLUParser {
             return {
                 type: 'RESET',
                 rawText: rawInput,
-                reply: '네! 모든 물건을 제자리로 정리할게요!'
+                reply: '네! 모든 물건을 제자리로 정리할게요!',
+                hasEndingVerb: true
             };
         }
 
@@ -209,7 +220,8 @@ class NLUParser {
             return {
                 type: 'COME',
                 rawText: rawInput,
-                reply: '슝슝~ 바로 앞으로 갈게요!'
+                reply: '슝슝~ 바로 앞으로 갈게요!',
+                hasEndingVerb: true
             };
         }
 
@@ -229,7 +241,8 @@ class NLUParser {
             return {
                 type: 'FINISH_EXPERIENCE',
                 rawText: rawInput,
-                reply: '오늘 체험을 멋지게 마쳤어요! 다음 친구를 맞이할 준비를 할게요!'
+                reply: '오늘 체험을 멋지게 마쳤어요! 다음 친구를 맞이할 준비를 할게요!',
+                hasEndingVerb: true
             };
         }
 
@@ -286,6 +299,9 @@ class NLUParser {
             destLocation = 'basket';
         }
 
+        // Check if an action ending verb is present in the text
+        const hasMoveVerb = /옮겨|올려|얹어|넣|담|쏙|집어|가져|놓|놔|둬|치워|꽂|배달|이동/.test(text);
+
         // Both Item and Destination successfully identified
         if (targetItem && destLocation) {
             // Guard: Box cannot be placed into box
@@ -301,15 +317,12 @@ class NLUParser {
                 item: targetItem,
                 destination: destLocation,
                 rawText: rawInput,
-                reply: exactReply
+                reply: exactReply,
+                hasEndingVerb: hasMoveVerb
             };
         }
 
         // Item identified + Action verb present without explicit destination -> Use sensible quest default
-        const hasMoveVerb = text.includes('옮겨') || text.includes('가져') || text.includes('치워') || 
-                            text.includes('올려') || text.includes('넣어') || text.includes('놔') || 
-                            text.includes('놓아') || text.includes('둬') || text.includes('보내');
-
         if (targetItem && hasMoveVerb) {
             const defaultDest = (targetItem === 'box') ? 'desk' : 
                                 (targetItem === 'bear') ? 'box' : 
@@ -323,7 +336,8 @@ class NLUParser {
                 item: targetItem,
                 destination: defaultDest,
                 rawText: rawInput,
-                reply: exactReply
+                reply: exactReply,
+                hasEndingVerb: true
             };
         }
 
@@ -333,7 +347,8 @@ class NLUParser {
                 type: 'NEED_DEST',
                 item: targetItem,
                 rawText: rawInput,
-                reply: '어디로 옮길까요? 책상, 침대, 선반 중에 말씀해 주세요!'
+                reply: '어디로 옮길까요? 책상, 침대, 선반 중에 말씀해 주세요!',
+                hasEndingVerb: false
             };
         }
 
@@ -343,7 +358,8 @@ class NLUParser {
                 type: 'NEED_ITEM',
                 destination: destLocation,
                 rawText: rawInput,
-                reply: '어떤 물건을 옮길까요? 상자, 곰인형, 공, 책 중에 말씀해 주세요!'
+                reply: '어떤 물건을 옮길까요? 상자, 곰인형, 공, 책 중에 말씀해 주세요!',
+                hasEndingVerb: false
             };
         }
 
@@ -352,7 +368,8 @@ class NLUParser {
             return {
                 type: 'WAKE_WORD',
                 rawText: rawInput,
-                reply: '네! 준비됐어요. 말씀하세요!'
+                reply: '네! 준비됐어요. 말씀하세요!',
+                hasEndingVerb: false
             };
         }
 
@@ -360,7 +377,8 @@ class NLUParser {
         return {
             type: 'UNKNOWN',
             rawText: rawInput,
-            reply: '잘 못 들었어요. "상자를 책상으로 옮겨줘"라고 해보세요!'
+            reply: '잘 못 들었어요. "상자를 책상으로 옮겨줘"라고 해보세요!',
+            hasEndingVerb: false
         };
     }
 }
