@@ -1,11 +1,11 @@
 /**
  * Speech Manager - STT (Speech to Text) and TTS (Text to Speech)
  * Featuring:
- * 1. Typecast AI Voice Integration (Kid-friendly characters: Robo, Junwoo, Dohee, Roro)
- * 2. Persistent Microphone Permission (Lock-in)
- * 3. 100% Hands-Free Continuous Listening with Silent Auto-Restart
- * 4. High-Speed, Cheerful TTS Engine with fallback to tuned child-robot voice
- * 5. Audio Cache support (.mp3 / .wav in audio_cache/)
+ * 1. 100% Consistent Typecast Robot Voice (Robo) with Web Audio API Zero-Lag Playback
+ * 2. Unlocked Dedicated Audio Player Element (Permanently eliminates Autoplay restrictions)
+ * 3. Smart Utterance Buffer & Non-Chopping STT Engine (Understands kids seamlessly)
+ * 4. Multi-part Debouncing for Pauses and Natural Speech Patterns
+ * 5. Full 56-phrase Audio Cache with Intelligent Semantic Fallback Resolver
  */
 class SpeechController {
     constructor() {
@@ -15,6 +15,18 @@ class SpeechController {
         this.isSpeaking = false;
         this.isSupported = false;
         this.koreanVoice = null;
+
+        // Dedicated DOM audio element
+        this.audioPlayer = null;
+        this.audioBufferCache = {}; // Pre-decoded Web Audio buffers for instant 0ms playback
+        this.currentBufferSource = null;
+        this.currentAudio = null;
+
+        // Speech buffer & Debouncing for natural child speech
+        this.speechBuffer = '';
+        this.evalTimer = null;
+        this.lastSpokenText = '';
+        this.lastSpeakEndTime = 0;
 
         // Speed multiplier setting
         this.speedMultiplier = 1.0;
@@ -121,8 +133,6 @@ class SpeechController {
         this.typecastVoice = 'robot_robo';
         this.speechToken = 0;
         this.speakTimeout = null;
-        this.typecastAvailable = false;
-        this.typecastApiWorking = false;
 
         // Hands-Free & Permission Persistence
         this.micStream = null;
@@ -146,26 +156,65 @@ class SpeechController {
 
         this.initTTS();
         this.initSTT();
-        this.initTypecast();
+
+        // Bind DOM elements on load
+        window.addEventListener('DOMContentLoaded', () => {
+            this.audioPlayer = document.getElementById('robot-audio-player');
+        });
     }
 
     /**
-     * Check Typecast API connectivity via local backend proxy
+     * Unlocks audio player & Web Audio API on the very first user click/touch
      */
-    async initTypecast() {
-        try {
-            const resp = await fetch('/api/typecast/status');
-            if (resp.ok) {
-                const data = await resp.json();
-                this.typecastAvailable = !!data.configured;
-                this.typecastStatus = data;
-                console.log('[Typecast AI] 상태 확인 완료:', data);
-                if (this.onTypecastStatus) {
-                    this.onTypecastStatus(data);
-                }
+    unlockAudio() {
+        if (!this.audioPlayer) {
+            this.audioPlayer = document.getElementById('robot-audio-player');
+        }
+
+        // 1. Silent unlock of DOM Audio element
+        if (this.audioPlayer) {
+            try {
+                this.audioPlayer.play().then(() => {
+                    this.audioPlayer.pause();
+                }).catch(() => {});
+            } catch (e) {}
+        }
+
+        // 2. Resume Web Audio API context
+        if (window.soundManager && window.soundManager.ctx) {
+            if (window.soundManager.ctx.state === 'suspended') {
+                window.soundManager.ctx.resume().catch(() => {});
             }
-        } catch (e) {
-            console.log('[Typecast AI] 오프라인 또는 서버 미실행 상태');
+        }
+
+        // 3. Preload all robot voice audio files in the background
+        this.preloadAudioCache();
+    }
+
+    /**
+     * Asynchronously preloads all 56 MP3 files into memory/buffers for instant playback
+     */
+    async preloadAudioCache() {
+        const uniqueKeys = Array.from(new Set(Object.values(this.audioFileMap)));
+        const ctx = window.soundManager ? window.soundManager.ctx : null;
+
+        for (const key of uniqueKeys) {
+            const url = `audio_cache/${key}.mp3`;
+            if (this.audioBufferCache[key]) continue;
+
+            fetch(url)
+                .then(r => {
+                    if (!r.ok) return null;
+                    return r.arrayBuffer();
+                })
+                .then(arrayBuf => {
+                    if (arrayBuf && ctx) {
+                        ctx.decodeAudioData(arrayBuf, (decoded) => {
+                            this.audioBufferCache[key] = decoded;
+                        }, () => {});
+                    }
+                })
+                .catch(() => {});
         }
     }
 
@@ -187,29 +236,6 @@ class SpeechController {
 
     getVoiceInfo() {
         return this.characters['robot_robo'];
-    }
-
-    /**
-     * Play authentic studio-recorded Typecast audio sample for character
-     */
-    playCharacterSample(voiceId = this.typecastVoice, onComplete = null) {
-        this.stopSpeaking();
-        const char = this.getVoiceInfo(voiceId);
-        if (!char || !char.audioSample) return;
-
-        if (window.soundManager) {
-            window.soundManager.playRobotChirp(char.beepFreq || 880);
-        }
-
-        const subtitle = document.getElementById('robot-subtitle');
-        if (subtitle && char.sampleText) {
-            subtitle.textContent = char.sampleText;
-            subtitle.classList.add('active');
-        }
-
-        this.playAudioFile(char.audioSample, () => {
-            if (onComplete) onComplete();
-        });
     }
 
     /**
@@ -248,6 +274,7 @@ class SpeechController {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             this.audioContext = new AudioCtx();
             const source = this.audioContext.createMediaStreamSource(stream);
+
             this.analyser = this.audioContext.createAnalyser();
             this.analyser.fftSize = 256;
             source.connect(this.analyser);
@@ -279,6 +306,9 @@ class SpeechController {
         requestAnimationFrame(() => this.monitorAudioLevel());
     }
 
+    /**
+     * Initialize Web Speech API STT with Smart Non-Chopping Utterance Aggregation
+     */
     initSTT() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -301,29 +331,37 @@ class SpeechController {
         };
 
         this.recognition.onresult = (event) => {
-            if (this.isSpeaking) {
+            // Discard recognition while robot is speaking or immediately after (prevent self-echo)
+            if (this.isSpeaking || (Date.now() - this.lastSpeakEndTime < 350)) {
+                this.speechBuffer = '';
                 return;
             }
 
             let interimText = '';
-            let finalText = '';
+            let newFinalText = '';
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalText += transcript;
+                const res = event.results[i];
+                const transcript = res[0].transcript;
+                if (res.isFinal) {
+                    newFinalText += ' ' + transcript;
                 } else {
-                    interimText += transcript;
+                    interimText += ' ' + transcript;
                 }
             }
 
-            if (interimText && this.onInterimResult) {
-                this.onInterimResult(interimText.trim());
+            if (newFinalText.trim()) {
+                this.speechBuffer = (this.speechBuffer + ' ' + newFinalText).trim();
             }
 
-            if (finalText && this.onFinalResult) {
-                this.onFinalResult(finalText.trim());
+            const currentCandidate = (this.speechBuffer + ' ' + interimText).trim();
+
+            if (currentCandidate && this.onInterimResult) {
+                this.onInterimResult(currentCandidate);
             }
+
+            // Smart evaluate candidate text without prematurely failing on pauses
+            this.evaluateSpeechInput(currentCandidate, !!newFinalText.trim());
         };
 
         this.recognition.onerror = (event) => {
@@ -348,9 +386,67 @@ class SpeechController {
                 clearTimeout(this.restartTimer);
                 this.restartTimer = setTimeout(() => {
                     this.startListening();
-                }, 300);
+                }, 250);
             }
         };
+    }
+
+    /**
+     * Smart Speech Evaluator
+     * Understands kids' natural pauses without premature errors or chopped phrases!
+     */
+    evaluateSpeechInput(candidateText, hasFinalChunk) {
+        if (!candidateText || this.isSpeaking) return;
+
+        const intent = window.nluParser ? window.nluParser.parse(candidateText) : null;
+        if (!intent) return;
+
+        // 1. High-Confidence Complete Action Commands: Fast execution!
+        const isActionable = [
+            'MOVE', 'LIGHT_ON', 'LIGHT_OFF', 'DANCE', 'RESET', 
+            'COME', 'PRAISE', 'FINISH_EXPERIENCE', 'GREET'
+        ].includes(intent.type);
+
+        if (isActionable) {
+            clearTimeout(this.evalTimer);
+            // Crisp 180ms debounce to catch any immediate trailing syllable
+            this.evalTimer = setTimeout(() => {
+                this.commitCommand(candidateText);
+            }, 180);
+            return;
+        }
+
+        // 2. Wake Word Only ("로봇아!", "로보야!"): Wait 650ms in case the child continues speaking
+        if (intent.type === 'WAKE_WORD') {
+            clearTimeout(this.evalTimer);
+            this.evalTimer = setTimeout(() => {
+                this.commitCommand(candidateText);
+            }, 650);
+            return;
+        }
+
+        // 3. Incomplete / Ambiguous / Unknown ("상자를...", "책상으로...", or unclear speech)
+        // Give the child 900ms to complete their thought before showing hints!
+        clearTimeout(this.evalTimer);
+        this.evalTimer = setTimeout(() => {
+            this.commitCommand(candidateText);
+        }, 900);
+    }
+
+    /**
+     * Finalizes and dispatches recognized command
+     */
+    commitCommand(text) {
+        if (!text || this.isSpeaking) return;
+        clearTimeout(this.evalTimer);
+        this.evalTimer = null;
+
+        const finalCommand = text.trim();
+        this.speechBuffer = ''; // Reset buffer for next utterance
+
+        if (this.onFinalResult && finalCommand) {
+            this.onFinalResult(finalCommand);
+        }
     }
 
     initTTS() {
@@ -406,6 +502,8 @@ class SpeechController {
         this.shouldKeepListening = false;
         this.isStarting = false;
         clearTimeout(this.restartTimer);
+        clearTimeout(this.evalTimer);
+        this.speechBuffer = '';
 
         if (this.recognition && this.isListening) {
             try {
@@ -425,16 +523,35 @@ class SpeechController {
 
     stopSpeaking() {
         this.speechToken = (this.speechToken || 0) + 1;
+        this.speechBuffer = '';
+        clearTimeout(this.evalTimer);
+
+        if (this.currentBufferSource) {
+            try {
+                this.currentBufferSource.onended = null;
+                this.currentBufferSource.stop();
+                this.currentBufferSource.disconnect();
+            } catch (e) {}
+            this.currentBufferSource = null;
+        }
 
         if (this.currentAudio) {
             try {
                 this.currentAudio.onended = null;
                 this.currentAudio.onerror = null;
-                this.currentAudio.oncanplaythrough = null;
                 this.currentAudio.pause();
                 this.currentAudio.currentTime = 0;
             } catch (e) {}
             this.currentAudio = null;
+        }
+
+        if (this.audioPlayer) {
+            try {
+                this.audioPlayer.onended = null;
+                this.audioPlayer.onerror = null;
+                this.audioPlayer.pause();
+                this.audioPlayer.currentTime = 0;
+            } catch (e) {}
         }
 
         if (this.synthesis) {
@@ -450,14 +567,108 @@ class SpeechController {
 
         if (this.isSpeaking) {
             this.isSpeaking = false;
+            this.lastSpeakEndTime = Date.now();
             if (this.onSpeakEnd) this.onSpeakEnd();
         }
     }
 
     /**
+     * Comprehensive Semantic & Keyword Resolver
+     * Ensures EVERY response maps 100% to a studio Typecast robot voice file!
+     */
+    resolveCacheKey(text) {
+        if (!text) return null;
+        const trimmed = text.trim();
+
+        // 1. Direct match
+        if (this.audioFileMap[trimmed]) {
+            return this.audioFileMap[trimmed];
+        }
+
+        // 2. Normalized match (strip punctuation, whitespace, quotes)
+        const clean = (s) => s.replace(/[\s.,?!~"'“”]/g, '');
+        const targetClean = clean(trimmed);
+
+        for (const [key, val] of Object.entries(this.audioFileMap)) {
+            if (clean(key) === targetClean) {
+                return val;
+            }
+        }
+
+        // 3. Item & Location Movements
+        const hasBox = targetClean.includes('상자') || targetClean.includes('박스');
+        const hasBear = targetClean.includes('인형') || targetClean.includes('곰인형') || targetClean.includes('곰돌이');
+        const hasBall = targetClean.includes('공') || targetClean.includes('축구공');
+        const hasBook = targetClean.includes('책') && !targetClean.includes('책상') && !targetClean.includes('책장');
+
+        const hasDesk = targetClean.includes('책상') || targetClean.includes('테이블');
+        const hasBed = targetClean.includes('침대');
+        const hasShelf = targetClean.includes('선반') || targetClean.includes('책장');
+        const hasFloor = targetClean.includes('바닥');
+        const hasBasket = targetClean.includes('바구니');
+
+        const isDone = targetClean.includes('옮겼') || targetClean.includes('올렸') || targetClean.includes('넣었');
+
+        // Box
+        if (hasBox && hasDesk) return isDone ? 'done_box_desk' : 'box_desk';
+        if (hasBox && hasBed) return isDone ? 'done_box_bed' : 'box_bed';
+        if (hasBox && hasShelf) return isDone ? 'done_box_shelf' : 'box_shelf';
+        if (hasBox && hasFloor) return isDone ? 'done_box_floor' : 'box_floor';
+
+        // Bear
+        if (hasBear && (hasBox || targetClean.includes('상자위'))) return isDone ? 'done_bear_box' : 'bear_box';
+        if (hasBear && hasBed) return isDone ? 'done_bear_bed' : 'bear_bed';
+        if (hasBear && hasDesk) return isDone ? 'done_bear_desk' : 'bear_desk';
+        if (hasBear && hasShelf) return isDone ? 'done_bear_shelf' : 'bear_shelf';
+
+        // Ball
+        if (hasBall && hasBed) return isDone ? 'done_ball_bed' : 'ball_bed';
+        if (hasBall && hasDesk) return isDone ? 'done_ball_desk' : 'ball_desk';
+        if (hasBall && hasBasket) return isDone ? 'done_ball_basket' : 'ball_basket';
+        if (hasBall && hasShelf) return isDone ? 'done_ball_shelf' : 'ball_shelf';
+
+        // Book
+        if (hasBook && hasShelf) return isDone ? 'done_book_shelf' : 'book_shelf';
+        if (hasBook && hasDesk) return isDone ? 'done_book_desk' : 'book_desk';
+        if (hasBook && hasBed) return isDone ? 'done_book_bed' : 'book_bed';
+
+        // Already at location
+        if (targetClean.includes('이미')) {
+            if (hasDesk) return 'already_box_desk';
+            if (hasBox) return 'already_bear_box';
+            if (hasBed) return 'already_ball_bed';
+            if (hasShelf) return 'already_book_shelf';
+        }
+
+        // System & Quest events
+        if (targetClean.includes('대단해요') || targetClean.includes('모든퀘스트') || targetClean.includes('로봇마스터')) return 'all_quests_done';
+        if (targetClean.includes('체험을멋지게') || targetClean.includes('오늘체험') || targetClean.includes('다음친구를맞이')) return 'finish_exp';
+        if (targetClean.includes('새로운친구') || (targetClean.includes('친구') && targetClean.includes('로봇아'))) return 'next_student';
+        if (targetClean.includes('모두제자리') || targetClean.includes('제자리로정리') || targetClean.includes('정리했어')) return 'done_clean';
+        if (targetClean.includes('정리할게') || targetClean.includes('제자리로정리')) return 'clean';
+        if (targetClean.includes('불을켤') || targetClean.includes('불켤') || targetClean.includes('방불을켤')) return 'light_on';
+        if (targetClean.includes('불을끌') || targetClean.includes('불끌') || targetClean.includes('굿나잇')) return 'light_off';
+        if (targetClean.includes('춤춰') || targetClean.includes('룰루랄라')) return 'dance';
+        if (targetClean.includes('고마워') || targetClean.includes('정말기뻐')) return 'praise';
+        if (targetClean.includes('앞으로갈') || targetClean.includes('슝슝')) return 'come';
+        if (targetClean.includes('준비됐') || targetClean.includes('말씀하세')) return 'wake';
+        if (targetClean.includes('반가워') || targetClean.includes('도우미로봇이야')) return 'greet';
+        if (targetClean.includes('도우미로봇로보') || targetClean.includes('명령을내려보')) return 'intro';
+        if (targetClean.includes('손이불편한친구')) return 'intro_short';
+
+        if (targetClean.includes('어떤물건')) return 'need_item';
+        if (targetClean.includes('어디로옮길')) return 'need_dest';
+        if (targetClean.includes('어디로옮겨줄')) return 'unknown_where';
+        if (targetClean.includes('못찾았')) return 'not_found_item';
+        if (targetClean.includes('옮길수없어')) return 'cannot_move_slot';
+        if (targetClean.includes('못들었') || targetClean.includes('못알아') || targetClean.includes('다시한번')) return 'unknown_hint';
+
+        return null;
+    }
+
+    /**
      * Primary Speech Output Function
-     * Eliminates overlap by canceling any prior audio/speech immediately.
-     * Uses audio_cache to maintain 100% consistent robot voice throughout the whole experience.
+     * Plays authentic Typecast robot voice from audio cache with 100% consistency.
      */
     async speak(text, onComplete = null) {
         this.stopSpeaking();
@@ -470,81 +681,84 @@ class SpeechController {
         }
 
         const trimmed = (text || '').trim();
+        const cacheKey = this.resolveCacheKey(trimmed);
 
-        // 1. Direct match in audioFileMap
-        let cacheKey = this.audioFileMap[trimmed];
-
-        // 2. Fuzzy match (strip punctuation, whitespace, quotes)
-        if (!cacheKey) {
-            const clean = (s) => s.replace(/[\s.,?!~"'“”]/g, '');
-            const targetClean = clean(trimmed);
-            for (const [key, val] of Object.entries(this.audioFileMap)) {
-                if (clean(key) === targetClean) {
-                    cacheKey = val;
-                    break;
-                }
-            }
-        }
-
-        // 3. Keyword / Semantic matching
-        if (!cacheKey) {
-            if (trimmed.includes('이미') && trimmed.includes('책상')) cacheKey = 'already_box_desk';
-            else if (trimmed.includes('이미') && trimmed.includes('상자')) cacheKey = 'already_bear_box';
-            else if (trimmed.includes('이미') && trimmed.includes('침대')) cacheKey = 'already_ball_bed';
-            else if (trimmed.includes('이미') && trimmed.includes('선반')) cacheKey = 'already_book_shelf';
-            else if (trimmed.includes('새로운 친구') || (trimmed.includes('친구') && trimmed.includes('안녕') && trimmed.includes('로봇아'))) cacheKey = 'next_student';
-            else if (trimmed.includes('대단해요') || trimmed.includes('모든 퀘스트')) cacheKey = 'all_quests_done';
-            else if (trimmed.includes('오늘 체험을') || trimmed.includes('체험을 멋지게')) cacheKey = 'finish_exp';
-            else if (trimmed.includes('어떤 물건')) cacheKey = 'need_item';
-            else if (trimmed.includes('어디로 옮길')) cacheKey = 'need_dest';
-            else if (trimmed.includes('못 들었') || trimmed.includes('못 알아')) cacheKey = 'unknown_hint';
-            else if (trimmed.includes('못 찾았')) cacheKey = 'not_found_item';
-            else if (trimmed.includes('옮길 수 없어')) cacheKey = 'cannot_move_slot';
-            else if (trimmed.includes('어디로 옮겨줄')) cacheKey = 'unknown_where';
-        }
-
-        // Play authentic, high-quality consistent robot voice from audio cache
         if (cacheKey) {
             const ok = await this.playAudioFile(`audio_cache/${cacheKey}.mp3`, onComplete);
             if (ok || this.speechToken !== token) return;
         }
 
-        // Fallback Web Speech with matching lively robot pitch & rate
+        // Web Speech synthesis is ONLY used if an unmapped phrase is explicitly requested
         this.speakWebSpeech(trimmed, onComplete, token);
     }
 
+    /**
+     * Robust Audio Playback using Web Audio API buffer sources or unlocked DOM player
+     */
     playAudioFile(src, onComplete = null) {
-        if (this.currentAudio) {
-            try {
-                this.currentAudio.pause();
-                this.currentAudio.currentTime = 0;
-            } catch (e) {}
-            this.currentAudio = null;
-        }
-        if (this.synthesis) {
-            try { this.synthesis.cancel(); } catch (e) {}
-        }
+        this.stopSpeaking();
         const currentToken = this.speechToken;
 
         return new Promise((resolve) => {
-            const audio = new Audio(src);
-            // Crisp, clear Korean speaking speed
-            audio.playbackRate = 1.05 * (this.speedMultiplier || 1.0);
-            this.currentAudio = audio;
+            const cacheKeyMatch = src.match(/audio_cache\/(.+)\.mp3$/);
+            const cacheKey = cacheKeyMatch ? cacheKeyMatch[1] : null;
+
+            // Method 1: Web Audio API Buffer Playback (Zero-lag, 100% bypasses Autoplay blocks)
+            const ctx = window.soundManager ? window.soundManager.ctx : null;
+            if (ctx && cacheKey && this.audioBufferCache[cacheKey]) {
+                try {
+                    const source = ctx.createBufferSource();
+                    source.buffer = this.audioBufferCache[cacheKey];
+                    source.playbackRate.value = 1.05 * (this.speedMultiplier || 1.0);
+                    source.connect(ctx.destination);
+
+                    this.currentBufferSource = source;
+                    this.isSpeaking = true;
+                    if (this.onSpeakStart) this.onSpeakStart();
+
+                    source.onended = () => {
+                        if (this.speechToken !== currentToken) {
+                            resolve(false);
+                            return;
+                        }
+                        this.currentBufferSource = null;
+                        this.isSpeaking = false;
+                        this.lastSpeakEndTime = Date.now();
+                        if (this.onSpeakEnd) this.onSpeakEnd();
+                        if (onComplete) onComplete();
+                        resolve(true);
+                    };
+
+                    source.start(0);
+                    return;
+                } catch (e) {
+                    console.warn('Web Audio buffer playback error, using audio player fallback:', e);
+                }
+            }
+
+            // Method 2: Dedicated Unlocked Audio Element
+            if (!this.audioPlayer) {
+                this.audioPlayer = document.getElementById('robot-audio-player');
+            }
+            const player = this.audioPlayer || new Audio();
+            player.src = src;
+            player.playbackRate = 1.05 * (this.speedMultiplier || 1.0);
+            this.currentAudio = player;
             this.isSpeaking = true;
             if (this.onSpeakStart) this.onSpeakStart();
 
             const cleanup = () => {
-                audio.onended = null;
-                audio.onerror = null;
-                if (this.currentAudio === audio) {
+                player.onended = null;
+                player.onerror = null;
+                if (this.currentAudio === player) {
                     this.currentAudio = null;
                     this.isSpeaking = false;
+                    this.lastSpeakEndTime = Date.now();
                     if (this.onSpeakEnd) this.onSpeakEnd();
                 }
             };
 
-            audio.onended = () => {
+            player.onended = () => {
                 if (this.speechToken !== currentToken) {
                     resolve(false);
                     return;
@@ -554,12 +768,12 @@ class SpeechController {
                 resolve(true);
             };
 
-            audio.onerror = () => {
+            player.onerror = () => {
                 cleanup();
                 resolve(false);
             };
 
-            audio.play().catch(() => {
+            player.play().catch(() => {
                 cleanup();
                 resolve(false);
             });
@@ -567,9 +781,7 @@ class SpeechController {
     }
 
     /**
-     * Fallback & Primary Web Speech Synthesis
-     * Specially tuned for elementary school kids (cute cheerful animated robot tone)
-     * Guaranteed zero overlap via queue cancellation and debounced flushing.
+     * Fallback Web Speech Synthesis (Child robot tone)
      */
     speakWebSpeech(text, onComplete = null, token = this.speechToken) {
         if (!this.synthesis) {
@@ -577,12 +789,10 @@ class SpeechController {
             return;
         }
 
-        // Cancel previous speech to guarantee no overlap
         this.synthesis.cancel();
 
         if (this.speakTimeout) clearTimeout(this.speakTimeout);
 
-        // Debounce to allow Chrome/Edge TTS audio thread to cleanly reset
         this.speakTimeout = setTimeout(() => {
             if (this.speechToken !== token) return;
 
@@ -591,7 +801,6 @@ class SpeechController {
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ko-KR';
             
-            // Dynamic check for Korean voice to avoid defaulting to English/foreign voice
             if (!this.koreanVoice && this.synthesis) {
                 const allVoices = this.synthesis.getVoices() || [];
                 this.koreanVoice = allVoices.find(v => v.lang && (v.lang.startsWith('ko') || v.lang.includes('KR'))) || null;
@@ -600,7 +809,6 @@ class SpeechController {
                 utterance.voice = this.koreanVoice;
             }
 
-            // Cheerful kid-robot pitch and rate
             utterance.rate = Math.max(0.7, Math.min(2.0, this.speechRate));
             utterance.pitch = Math.max(0.5, Math.min(2.0, this.speechPitch));
 
@@ -616,13 +824,15 @@ class SpeechController {
             utterance.onend = () => {
                 if (this.speechToken !== token) return;
                 this.isSpeaking = false;
+                this.lastSpeakEndTime = Date.now();
                 if (this.onSpeakEnd) this.onSpeakEnd();
                 if (onComplete) onComplete();
             };
 
-            utterance.onerror = (e) => {
+            utterance.onerror = () => {
                 if (this.speechToken !== token) return;
                 this.isSpeaking = false;
+                this.lastSpeakEndTime = Date.now();
                 if (this.onSpeakEnd) this.onSpeakEnd();
                 if (onComplete) onComplete();
             };

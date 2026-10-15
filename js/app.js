@@ -52,6 +52,11 @@ class VoiceRobotApp {
 
         window.soundManager.init();
 
+        // Unlock audio system & preload cached robot voices
+        if (window.speechController && window.speechController.unlockAudio) {
+            window.speechController.unlockAudio();
+        }
+
         // Start always-listening
         await window.speechController.startListening();
         this.showNotification('🎉 마이크 상시 청취 중! 손을 쓰지 않고 편하게 말하세요.', 'info');
@@ -553,7 +558,7 @@ class VoiceRobotApp {
                 const isPutOn = intent.destination === 'box';
                 const isPutIn = intent.destination === 'basket';
                 const actionDone = isPutOn ? '올렸어요!' : (isPutIn ? '넣었어요!' : '옮겼어요!');
-                const locText = isPutOn ? '상자 위에' : destSlotJosa;
+                const locText = isPutOn ? '상자 위에' : (isPutIn ? '바구니에' : destSlotJosa);
                 const completeMsg = `${itemObjJosa} ${locText} ${actionDone}`;
                 this.handleRobotResponse(completeMsg);
 
