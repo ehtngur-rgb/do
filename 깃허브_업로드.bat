@@ -6,6 +6,8 @@ echo   저장소: https://github.com/ehtnqur-rgb/do.git
 echo ===================================================
 echo.
 
+set "PATH=C:\Program Files\Git\cmd;%PATH%"
+
 where git >nul 2>nul
 if %errorlevel% neq 0 (
     echo [알림] Git이 설치되어 있지 않습니다.
