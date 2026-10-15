@@ -1,0 +1,183 @@
+﻿Diagnose log at 2026-10-15T03:05:35Z
+
+AppPath: C:\PROGRA~1\Git\mingw64\bin\git-credential-manager.exe
+InstallDir: C:\PROGRA~1\Git\mingw64\bin\
+Version: 2.9.1+6760f0ef069c994aa2bb1d703fb374986ee82a3e
+
+------------
+Diagnostic: Environment
+Skipped: False
+Success: True
+Exception: None
+Log:
+OSType: Windows
+OSVersion: 10.0 (build 26200)
+Reading environment variables... OK
+ Variables:
+SESSIONNAME=Console
+ProgramFiles(x86)=C:\Program Files (x86)
+AGY_BROWSER_ACTIVE_PORT_FILE=C:\Users\PEN\AppData\Roaming\Antigravity\DevToolsActivePort
+EFC_536_4126798990=1
+PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 151 Stepping 2, GenuineIntel
+TMP=C:\Users\PEN\AppData\Local\Temp
+ALLUSERSPROFILE=C:\ProgramData
+PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.CPL
+EFC_536_1592913036=1
+USERDOMAIN=DESKTOP-7D75914
+PROCESSOR_REVISION=9702
+ANTIGRAVITY_SOURCE_METADATA={"tool":{"conversationId":"5d27b15f-47a7-4467-acad-f9c66fbcd862", "stepIndex":1526, "toolCall":{"id":"call_117930", "name":"run_command", "argumentsJson":"{\"CommandLine\":\"powershell -ExecutionPolicy Bypass -Command \\\"$env:PATH = 'C:\\\\Program Files\\\\Git\\\\cmd;C:\\\\Program Files\\\\Git\\\\mingw64\\\\bin;' + $env:PATH; \\u0026 'C:\\\\PROGRA~1\\\\Git\\\\mingw64\\\\bin\\\\git-credential-manager.exe' diagnose\\\"\",\"Cwd\":\"c:\\\\Users\\\\PEN\\\\Desktop\\\\새 폴더\",\"IsDaemon\":false,\"WaitMsBeforeAsync\":8000,\"toolAction\":\"Running GCM diagnose\",\"toolSummary\":\"GCM diagnose\"}", "thinkingSignature":"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"}}}
+TEMP=C:\Users\PEN\AppData\Local\Temp
+USERPROFILE=C:\Users\PEN
+ProgramW6432=C:\Program Files
+LOGONSERVER=\\DESKTOP-7D75914
+USERNAME=PEN
+SystemRoot=C:\WINDOWS
+AGY_BROWSER_WS_URL=ws://127.0.0.1:59904/devtools/browser/cec0cd5f-bb08-4476-a717-4c300d31ae19
+PATH=C:/Users/PEN/.gemini/antigravity/bin;C:\Users\PEN\AppData\Roaming\Antigravity\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common;C:\Program Files\Git\cmd;C:\Users\PEN\AppData\Local\Microsoft\WindowsApps;
+OneDrive=C:\Users\PEN\OneDrive - 모덕초등학교
+PROCESSOR_ARCHITECTURE=AMD64
+CommonProgramFiles=C:\Program Files\Common Files
+TYPECAST_API_KEY=__pltKN3u2NpNQXTqTjDqtepAxHRySzkuNVUQT8yh4iXk
+ANTIGRAVITY_TRAJECTORY_ID=df022070-f504-48a4-8394-3acad13c2c44
+ANTIGRAVITY_LS_ADDRESS=localhost:59908
+ProgramData=C:\ProgramData
+HOMEPATH=\Users\PEN
+ANTIGRAVITY_APP_DATA_DIR=C:/Users/PEN/.gemini/antigravity
+IGCCSVC_DB=AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAK0Eu6hu5tkuiTdyHZvNJYwQAAAACAAAAAAAQZgAAAAEAACAAAAClzMXRu6gfdI7Ue+dEM+gqkssISeSlVsOE9ooBwum3ggAAAAAOgAAAAAIAACAAAAA4a3qYf9aYF6AMvgCxKm+VAPCOf33Cz7y92gOVxIKd02AAAABz545VcyWjyoqK+xiS0yeZwNwTkp5nsvR3xYeutwNe5UY+adhXeNM3uOvdi+U9OGCZy7MUOppi2RH7EydBS/qoqihjnSzQb7jXMNGTkNxX4lcZ72U/Ps6xHKjAG1drGw1AAAAAh705bdshotht2VQjoYeOwhyCGzTVuFlJ2q8ksGb/ZlE45TcBqQbLmtFH9IBYWGGiJuWlAsDh9/TRcwLbn/ASOQ==
+COMPUTERNAME=DESKTOP-7D75914
+ TYPECAST_API_KEY=__pltKN3u2NpNQXTqTjDqtepAxHRySzkuNVUQT8yh4iXk
+ANTIGRAVITY_AGENT=1
+CommonProgramW6432=C:\Program Files\Common Files
+OneDriveCommercial=C:\Users\PEN\OneDrive - 모덕초등학교
+DriverData=C:\Windows\System32\Drivers\DriverData
+HOMEDRIVE=C:
+windir=C:\WINDOWS
+GIT_TRACE2_PARENT_SID=747ff13f-9b9f-43ef-b068-b545a59aaef2
+SystemDrive=C:
+NUMBER_OF_PROCESSORS=20
+OS=Windows_NT
+ZES_ENABLE_SYSMAN=1
+ProgramFiles=C:\Program Files
+ComSpec=C:\WINDOWS\system32\cmd.exe
+USERDOMAIN_ROAMINGPROFILE=DESKTOP-7D75914
+CHROME_DEVTOOLS_MCP_JS=C:\Users\PEN\AppData\Local\Programs\antigravity\resources\app.asar.unpacked\node_modules\chrome-devtools-mcp\build\src\bin\chrome-devtools-mcp.js
+PSModulePath=C:\Users\PEN\Documents\WindowsPowerShell\Modules;C:\Program Files\WindowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\v1.0\Modules
+ANTIGRAVITY_CSRF_TOKEN=6131ec26-380f-45ac-a991-3d432a946a59
+ANTIGRAVITY_CONVERSATION_ID=5d27b15f-47a7-4467-acad-f9c66fbcd862
+APPDATA=C:\Users\PEN\AppData\Roaming
+ANTIGRAVITY_PROJECT_ID=e75c1c61-83ba-4116-956a-1d637c8d3318
+PROCESSOR_LEVEL=6
+LOCALAPPDATA=C:\Users\PEN\AppData\Local
+ANTIGRAVITY_AGENTAPI_EXE=C:\Users\PEN\AppData\Local\Programs\antigravity\resources\bin\language_server.exe
+PSExecutionPolicyPreference=Bypass
+CommonProgramFiles(x86)=C:\Program Files (x86)\Common Files
+PUBLIC=C:\Users\Public
+ANTIGRAVITY_LS_VERSION=hub-2.23.1
+
+
+------------
+Diagnostic: File system
+Skipped: False
+Success: True
+Exception: None
+Log:
+Temporary directory is 'C:\Users\PEN\AppData\Local\Temp\'...
+Checking basic file I/O...
+Writing to temporary file 'C:\Users\PEN\AppData\Local\Temp\c071484dba24a0bf7b9adca4'... OK
+Reading from temporary file 'C:\Users\PEN\AppData\Local\Temp\c071484dba24a0bf7b9adca4'... OK
+Deleting temporary file 'C:\Users\PEN\AppData\Local\Temp\c071484dba24a0bf7b9adca4'... OK
+Testing IFileSystem instance...
+UserHomePath: C:\Users\PEN
+UserDataDirectoryPath: C:\Users\PEN\.gcm
+GetCurrentDirectory(): C:\Users\PEN\Desktop\새 폴더
+
+------------
+Diagnostic: Networking
+Skipped: False
+Success: True
+Exception: None
+Log:
+Checking networking and HTTP stack...
+Creating HTTP client... OK
+IsNetworkAvailable: True
+Sending HEAD request to http://example.com... OK
+Sending HEAD request to https://example.com... OK
+Acquiring free TCP port... OK
+Testing local HTTP loopback connections...
+Creating new HTTP listener for http://localhost:51971/... OK
+Waiting for loopback connection... OK
+Writing response... OK
+Waiting for response data... OK
+Loopback connection data OK
+
+------------
+Diagnostic: Git
+Skipped: False
+Success: True
+Exception: None
+Log:
+Getting Git version... OK
+Git version is '2.55.0.windows.5'
+Locating current repository...Git repository at 'C:/Users/PEN/Desktop/???대뜑/.git'
+ OK
+Listing all Git configuration... OK
+Git configuration:
+file:C:/Program Files/Git/etc/gitconfig	diff.astextplain.textconv=astextplain
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.clean=git-lfs clean -- %f
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.smudge=git-lfs smudge -- %f
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.process=git-lfs filter-process
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.required=true
+file:C:/Program Files/Git/etc/gitconfig	http.sslbackend=schannel
+file:C:/Program Files/Git/etc/gitconfig	core.autocrlf=true
+file:C:/Program Files/Git/etc/gitconfig	core.fscache=true
+file:C:/Program Files/Git/etc/gitconfig	core.symlinks=false
+file:C:/Program Files/Git/etc/gitconfig	pull.rebase=false
+file:C:/Program Files/Git/etc/gitconfig	credential.helper=manager
+file:C:/Program Files/Git/etc/gitconfig	credential.https://dev.azure.com.usehttppath=true
+file:C:/Program Files/Git/etc/gitconfig	init.defaultbranch=master
+file:C:/Users/PEN/.gitconfig	user.name=ehtnqur-rgb
+file:C:/Users/PEN/.gitconfig	user.email=ehtnqur-rgb@users.noreply.github.com
+file:.git/config	core.repositoryformatversion=0
+file:.git/config	core.filemode=false
+file:.git/config	core.bare=false
+file:.git/config	core.logallrefupdates=true
+file:.git/config	core.symlinks=false
+file:.git/config	core.ignorecase=true
+file:.git/config	remote.origin.url=https://github.com/ehtnqur-rgb/do.git
+file:.git/config	remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+
+
+------------
+Diagnostic: Credential storage
+Skipped: False
+Success: True
+Exception: None
+Log:
+ICredentialStore instance is of type: CredentialStore
+Writing test credential... OK
+Reading test credential... OK
+Deleting test credential... OK
+
+------------
+Diagnostic: Microsoft authentication (AAD/MSA)
+Skipped: False
+Success: True
+Exception: None
+Log:
+Broker is not enabled.
+Gathering MSAL token cache data... OK
+CacheDirectory: C:\Users\PEN\AppData\Local\.IdentityService
+CacheFileName: msal.cache
+CacheFilePath: C:\Users\PEN\AppData\Local\.IdentityService\msal.cache
+Creating cache helper... OK
+Verifying MSAL token cache persistence... OK
+
+------------
+Diagnostic: GitHub API
+Skipped: False
+Success: True
+Exception: None
+Log:
+Using 'https://github.com/' as API target.
+Querying '/meta' endpoint... OK
+
