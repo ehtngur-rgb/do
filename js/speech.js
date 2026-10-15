@@ -106,11 +106,16 @@ class SpeechController {
             '와아 대단해요! 모든 퀘스트를 성공했어요! 친구는 멋진 AI 로봇 마스터예요!': 'all_quests_done',
             '오늘 체험을 멋지게 마쳤어요! 다음 친구를 맞이할 준비를 할게요!': 'finish_exp',
 
-            // 9. Feedback
+            // 9. Feedback & Guidance
             '잘 못 알아들었어요. 다시 한 번 말씀해 주시겠어요?': 'unknown',
+            '잘 못 들었어요. "상자를 책상으로 옮겨줘"라고 해보세요!': 'unknown_hint',
+            '잘 못 들었어요. 상자를 책상으로 옮겨줘라고 해보세요!': 'unknown_hint',
+            '네! 상자나 인형을 어디로 옮겨줄까요?': 'unknown_where',
             '어떤 물건을 옮길까요? 상자, 곰인형, 공, 책 중에 말씀해 주세요!': 'need_item',
             '어디로 옮길까요? 책상, 침대, 선반 중에 말씀해 주세요!': 'need_dest',
-            '속도를 변경했어요!': 'speed_change'
+            '속도를 변경했어요!': 'speed_change',
+            '방에서 그 물건을 못 찾았어요.': 'not_found_item',
+            '그 위치로는 옮길 수 없어요.': 'cannot_move_slot'
         };
 
         this.typecastVoice = 'robot_robo';
@@ -490,6 +495,12 @@ class SpeechController {
             else if (trimmed.includes('새로운 친구') || (trimmed.includes('친구') && trimmed.includes('안녕') && trimmed.includes('로봇아'))) cacheKey = 'next_student';
             else if (trimmed.includes('대단해요') || trimmed.includes('모든 퀘스트')) cacheKey = 'all_quests_done';
             else if (trimmed.includes('오늘 체험을') || trimmed.includes('체험을 멋지게')) cacheKey = 'finish_exp';
+            else if (trimmed.includes('어떤 물건')) cacheKey = 'need_item';
+            else if (trimmed.includes('어디로 옮길')) cacheKey = 'need_dest';
+            else if (trimmed.includes('못 들었') || trimmed.includes('못 알아')) cacheKey = 'unknown_hint';
+            else if (trimmed.includes('못 찾았')) cacheKey = 'not_found_item';
+            else if (trimmed.includes('옮길 수 없어')) cacheKey = 'cannot_move_slot';
+            else if (trimmed.includes('어디로 옮겨줄')) cacheKey = 'unknown_where';
         }
 
         // Play authentic, high-quality consistent robot voice from audio cache
@@ -503,13 +514,22 @@ class SpeechController {
     }
 
     playAudioFile(src, onComplete = null) {
-        this.stopSpeaking();
+        if (this.currentAudio) {
+            try {
+                this.currentAudio.pause();
+                this.currentAudio.currentTime = 0;
+            } catch (e) {}
+            this.currentAudio = null;
+        }
+        if (this.synthesis) {
+            try { this.synthesis.cancel(); } catch (e) {}
+        }
         const currentToken = this.speechToken;
 
         return new Promise((resolve) => {
             const audio = new Audio(src);
-            // Lively, cheerful kid-robot playback rate
-            audio.playbackRate = 1.15 * (this.speedMultiplier || 1.0);
+            // Crisp, clear Korean speaking speed
+            audio.playbackRate = 1.05 * (this.speedMultiplier || 1.0);
             this.currentAudio = audio;
             this.isSpeaking = true;
             if (this.onSpeakStart) this.onSpeakStart();
@@ -570,6 +590,12 @@ class SpeechController {
 
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'ko-KR';
+            
+            // Dynamic check for Korean voice to avoid defaulting to English/foreign voice
+            if (!this.koreanVoice && this.synthesis) {
+                const allVoices = this.synthesis.getVoices() || [];
+                this.koreanVoice = allVoices.find(v => v.lang && (v.lang.startsWith('ko') || v.lang.includes('KR'))) || null;
+            }
             if (this.koreanVoice) {
                 utterance.voice = this.koreanVoice;
             }
