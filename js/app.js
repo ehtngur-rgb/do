@@ -63,8 +63,9 @@ class VoiceRobotApp {
 
         // Crisp welcome speech using dedicated robot voice
         setTimeout(() => {
-            this.handleRobotResponse('안녕하세요! 저는 여러분의 도우미 로봇 로보에요! 손을 쓰지 않고 목소리로 저에게 명령을 내려보세요!');
-            if (this.robot) this.robot.wave();
+            this.handleRobotResponse('안녕하세요! 저는 여러분의 도우미 로봇 로보에요! 손을 쓰지 않고 목소리로 저에게 명령을 내려보세요!', () => {
+                if (this.robot) this.robot.wave();
+            });
         }, 500);
     }
 
@@ -454,8 +455,9 @@ class VoiceRobotApp {
             case 'WAKE_WORD':
                 this.robot.setExpression('surprised');
                 if (window.soundManager) window.soundManager.play('button');
-                this.handleRobotResponse(intent.reply);
-                this.robot.wave();
+                this.handleRobotResponse(intent.reply, () => {
+                    this.robot.wave();
+                });
                 break;
 
             case 'MOVE':
@@ -472,17 +474,19 @@ class VoiceRobotApp {
 
             case 'GREET':
                 this.isProcessingCommand = true;
-                this.handleRobotResponse(intent.reply);
-                this.robot.wave(() => {
-                    this.isProcessingCommand = false;
+                this.handleRobotResponse(intent.reply, () => {
+                    this.robot.wave(() => {
+                        this.isProcessingCommand = false;
+                    });
                 });
                 break;
 
             case 'DANCE':
                 this.isProcessingCommand = true;
-                this.handleRobotResponse(intent.reply);
-                this.robot.dance(() => {
-                    this.isProcessingCommand = false;
+                this.handleRobotResponse(intent.reply, () => {
+                    this.robot.dance(() => {
+                        this.isProcessingCommand = false;
+                    });
                 });
                 break;
 
@@ -492,19 +496,21 @@ class VoiceRobotApp {
 
             case 'COME':
                 this.isProcessingCommand = true;
-                this.handleRobotResponse(intent.reply);
-                this.robot.moveTo(new THREE.Vector3(0, 0, 3.0), () => {
-                    this.robot.wave(() => {
-                        this.isProcessingCommand = false;
+                this.handleRobotResponse(intent.reply, () => {
+                    this.robot.moveTo(new THREE.Vector3(0, 0, 3.0), () => {
+                        this.robot.wave(() => {
+                            this.isProcessingCommand = false;
+                        });
                     });
                 });
                 break;
 
             case 'PRAISE':
                 this.isProcessingCommand = true;
-                this.handleRobotResponse(intent.reply);
-                this.robot.cheer(() => {
-                    this.isProcessingCommand = false;
+                this.handleRobotResponse(intent.reply, () => {
+                    this.robot.cheer(() => {
+                        this.isProcessingCommand = false;
+                    });
                 });
                 break;
 
@@ -547,44 +553,48 @@ class VoiceRobotApp {
 
         this.isProcessingCommand = true;
         this.updateRobotBadge(`작업 중: ${itemObj.name} ➔ ${destSlot.name}`);
-        this.handleRobotResponse(intent.reply);
 
-        this.robot.carryItemTo(intent.item, intent.destination, (success) => {
-            this.isProcessingCommand = false;
-            this.updateRobotBadge('🟢 항상 대기 중 (말씀하세요)');
-            if (success) {
-                const itemObjJosa = window.josa ? window.josa(itemObj.name, '을/를') : `${itemObj.name}을`;
-                const destSlotJosa = window.josa ? window.josa(destSlot.name, '으로/로') : `${destSlot.name}으로`;
-                const isPutOn = intent.destination === 'box';
-                const isPutIn = intent.destination === 'basket';
-                const actionDone = isPutOn ? '올렸어요!' : (isPutIn ? '넣었어요!' : '옮겼어요!');
-                const locText = isPutOn ? '상자 위에' : (isPutIn ? '바구니에' : destSlotJosa);
-                const completeMsg = `${itemObjJosa} ${locText} ${actionDone}`;
-                this.handleRobotResponse(completeMsg);
+        // Wait until robot speech finishes before physically moving
+        this.handleRobotResponse(intent.reply, () => {
+            this.robot.carryItemTo(intent.item, intent.destination, (success) => {
+                this.isProcessingCommand = false;
+                this.updateRobotBadge('🟢 항상 대기 중 (말씀하세요)');
+                if (success) {
+                    const itemObjJosa = window.josa ? window.josa(itemObj.name, '을/를') : `${itemObj.name}을`;
+                    const destSlotJosa = window.josa ? window.josa(destSlot.name, '으로/로') : `${destSlot.name}으로`;
+                    const isPutOn = intent.destination === 'box';
+                    const isPutIn = intent.destination === 'basket';
+                    const actionDone = isPutOn ? '올렸어요!' : (isPutIn ? '넣었어요!' : '옮겼어요!');
+                    const locText = isPutOn ? '상자 위에' : (isPutIn ? '바구니에' : destSlotJosa);
+                    const completeMsg = `${itemObjJosa} ${locText} ${actionDone}`;
+                    this.handleRobotResponse(completeMsg);
 
-                // Notify Quest Manager that item move succeeded!
-                if (this.questManager) {
-                    this.questManager.checkCommand(intent, 'done');
+                    // Notify Quest Manager that item move succeeded!
+                    if (this.questManager) {
+                        this.questManager.checkCommand(intent, 'done');
+                    }
                 }
-            }
+            });
         });
     }
 
     executeLightCommand(isOn, replyMsg) {
         this.isProcessingCommand = true;
-        this.handleRobotResponse(replyMsg);
-        if (window.soundManager) window.soundManager.play('lightSwitch');
-
-        this.world.setLamp(isOn);
-        this.robot.cheer(() => {
-            this.isProcessingCommand = false;
+        // Wait until speech finishes before switching lamp and cheering
+        this.handleRobotResponse(replyMsg, () => {
+            if (window.soundManager) window.soundManager.play('lightSwitch');
+            this.world.setLamp(isOn);
+            this.robot.cheer(() => {
+                this.isProcessingCommand = false;
+            });
         });
     }
 
     executeResetCommand(replyMsg) {
         this.isProcessingCommand = true;
         this.updateRobotBadge('방 정리 중...');
-        this.handleRobotResponse(replyMsg);
+        // Wait until speech finishes before starting room cleanup
+        this.handleRobotResponse(replyMsg, () => {
 
         const resetItem = (keys, index = 0) => {
             if (index >= keys.length) {
@@ -611,15 +621,20 @@ class VoiceRobotApp {
 
         const itemKeys = Object.keys(this.world.items);
         resetItem(itemKeys, 0);
+        });
     }
 
-    handleRobotResponse(text) {
+    handleRobotResponse(text, onComplete = null) {
         const robotSubtitle = document.getElementById('robot-subtitle');
-        robotSubtitle.textContent = text;
-        robotSubtitle.classList.add('active');
+        if (robotSubtitle) {
+            robotSubtitle.textContent = text;
+            robotSubtitle.classList.add('active');
+        }
 
-        // Play fast TTS
-        window.speechController.speak(text);
+        // Play audio and invoke onComplete once the robot finishes speaking
+        window.speechController.speak(text, () => {
+            if (onComplete) onComplete();
+        });
     }
 
     updateRobotBadge(statusText) {
@@ -644,18 +659,19 @@ class VoiceRobotApp {
      * Triggered when all 4 quests are completed
      */
     handleAllQuestsCompleted() {
-        if (window.soundManager) window.soundManager.playFanfare();
-        if (this.world && this.robot) {
-            this.world.spawnConfetti(this.robot.mesh.position, 60);
-        }
-        this.robot.cheer();
-        this.handleRobotResponse('와아 대단해요! 모든 퀘스트를 성공했어요! 친구는 멋진 AI 로봇 마스터예요!');
-        this.showNotification('🏆 모든 퀘스트 완료! 배리어프리 AI 수료증이 발급되었습니다!', 'success');
+        this.handleRobotResponse('와아 대단해요! 모든 퀘스트를 성공했어요! 친구는 멋진 AI 로봇 마스터예요!', () => {
+            if (window.soundManager) window.soundManager.playFanfare();
+            if (this.world && this.robot) {
+                this.world.spawnConfetti(this.robot.mesh.position, 60);
+            }
+            if (this.robot) this.robot.cheer();
+            this.showNotification('🏆 모든 퀘스트 완료! 배리어프리 AI 수료증이 발급되었습니다!', 'success');
 
-        setTimeout(() => {
-            const modal = document.getElementById('completion-modal');
-            if (modal) modal.classList.add('open');
-        }, 1200);
+            setTimeout(() => {
+                const modal = document.getElementById('completion-modal');
+                if (modal) modal.classList.add('open');
+            }, 600);
+        });
     }
 
     /**
@@ -705,8 +721,9 @@ class VoiceRobotApp {
 
         // Cheerful welcome for the new student
         setTimeout(() => {
-            this.handleRobotResponse('새로운 친구 안녕! 난 도우미 로봇이야! 손을 등 뒤로 하고 나를 "로봇아!" 하고 불러봐!');
-            if (this.robot) this.robot.wave();
+            this.handleRobotResponse('새로운 친구 안녕! 난 도우미 로봇이야! 손을 등 뒤로 하고 나를 "로봇아!" 하고 불러봐!', () => {
+                if (this.robot) this.robot.wave();
+            });
         }, 600);
     }
 
