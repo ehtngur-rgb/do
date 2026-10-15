@@ -80,8 +80,9 @@
 3. 화면에 나타난 **QR 코드**를 태블릿(아이패드, 갤럭시 탭)의 기본 카메라로 비추면 즉시 접속됩니다!
 
 ### 2. GitHub Pages로 인터넷 무료 웹 배포하기 (외부 어디서든 접속)
-1. 저장소 `https://github.com/ehtnqur-rgb/do`를 **Public(공개)**으로 설정합니다.
-2. `깃허브_업로드.bat`을 실행하여 모든 코드를 업로드합니다.
+1. 저장소 `https://github.com/ehtngur-rgb/do`를 **Public(공개)**으로 설정합니다.
+2. `깃허브_업로드.bat` 또는 `GitHub_Upload.bat`을 실행하여 모든 코드를 업로드합니다.
 3. GitHub 저장소의 **[Settings] -> [Pages]**에서 Branch를 **`main`**으로 선택하고 저장합니다.
-4. 배포 완료 후 **`https://ehtnqur-rgb.github.io/do/`** 주소로 태블릿에서 바로 접속할 수 있습니다!
+4. 배포 완료 후 **`https://ehtngur-rgb.github.io/do/`** 주소로 태블릿 및 패들렛에서 바로 접속할 수 있습니다!
+
 

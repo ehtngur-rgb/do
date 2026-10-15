@@ -1,9 +1,9 @@
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $Host.UI.RawUI.WindowTitle = "GitHub 업로드 및 웹 호스팅 배포"
 
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  🚀 [배리어프리 음성 로봇] GitHub 업로드 & 패들렛 링크 배포" -ForegroundColor Yellow
-Write-Host "  저장소: https://github.com/ehtnqur-rgb/do" -ForegroundColor White
+Write-Host "  저장소: https://github.com/ehtngur-rgb/do" -ForegroundColor White
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -40,7 +40,7 @@ Write-Host ""
 Write-Host "[2/3] 최신 코드 커밋 중..." -ForegroundColor Green
 & $git branch -M main
 & $git remote remove origin 2>$null
-& $git remote add origin https://github.com/ehtnqur-rgb/do.git
+& $git remote add origin https://github.com/ehtngur-rgb/do.git
 & $git add -A
 & $git commit -m "소리로 움직이는 도우미 로봇 친구 최신 버전 배포" 2>$null
 
@@ -56,10 +56,10 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "========================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  📍 GitHub 저장소:" -ForegroundColor Cyan
-    Write-Host "     https://github.com/ehtnqur-rgb/do" -ForegroundColor White
+    Write-Host "     https://github.com/ehtngur-rgb/do" -ForegroundColor White
     Write-Host ""
     Write-Host "  🌐 패들렛(Padlet)에 올릴 학생 접속 주소:" -ForegroundColor Cyan
-    Write-Host "     https://ehtnqur-rgb.github.io/do/" -ForegroundColor Yellow
+    Write-Host "     https://ehtngur-rgb.github.io/do/" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "  📱 태블릿 접속용 QR 코드:" -ForegroundColor Cyan
     Write-Host "     폴더 안의 tablet_qr_code.png 파일을 태블릿으로 비춰보세요!" -ForegroundColor White
@@ -67,7 +67,7 @@ if ($LASTEXITCODE -eq 0) {
 } else {
     Write-Host ""
     Write-Host "[안내] GitHub 웹사이트에서 직접 올리는 초간단 방법:" -ForegroundColor Yellow
-    Write-Host "1. 웹 브라우저에서 https://github.com/ehtnqur-rgb/do 에 접속합니다." -ForegroundColor White
+    Write-Host "1. 웹 브라우저에서 https://github.com/ehtngur-rgb/do 에 접속합니다." -ForegroundColor White
     Write-Host "2. [Add file] -> [Upload files]를 눌러 폴더 안의 파일들을 드래그하면 즉시 올라갑니다!" -ForegroundColor White
 }
 
