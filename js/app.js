@@ -28,13 +28,6 @@ class VoiceRobotApp {
         // Start 3D Animation Loop
         this.animate();
 
-        // Auto-check if launched with auto-permission flags
-        setTimeout(() => {
-            if (!this.isAppStarted) {
-                // Try non-blocking background listen
-                window.speechController.startListening();
-            }
-        }, 600);
     }
 
     /**
@@ -50,23 +43,34 @@ class VoiceRobotApp {
             startOverlay.classList.add('hidden');
         }
 
-        window.soundManager.init();
+        // 1. Initialize sound system and resume Web Audio immediately
+        if (window.soundManager) {
+            window.soundManager.init();
+            if (window.soundManager.ctx && window.soundManager.ctx.state === 'suspended') {
+                window.soundManager.ctx.resume().catch(() => {});
+            }
+        }
 
-        // Unlock audio system & preload cached robot voices
+        // 2. Unlock speechController audio
         if (window.speechController && window.speechController.unlockAudio) {
             window.speechController.unlockAudio();
         }
 
-        // Start always-listening
-        await window.speechController.startListening();
-        this.showNotification('🎉 마이크 상시 청취 중! 손을 쓰지 않고 편하게 말하세요.', 'info');
+        // 3. Play immediate gentle chime for instant auditory verification
+        if (window.soundManager) {
+            window.soundManager.play('pickup');
+        }
 
-        // Crisp welcome speech using dedicated robot voice
+        // 4. Start speech recognition
+        await window.speechController.startListening();
+        this.showNotification('🎉 마이크 켜짐! 손을 쓰지 않고 편하게 말하세요.', 'info');
+
+        // 5. Crisp welcome speech using dedicated robot voice
         setTimeout(() => {
             this.handleRobotResponse('안녕하세요! 저는 여러분의 도우미 로봇 로보에요! 손을 쓰지 않고 목소리로 저에게 명령을 내려보세요!', () => {
                 if (this.robot) this.robot.wave();
             });
-        }, 500);
+        }, 350);
     }
 
     setupSpeechEvents() {
@@ -84,12 +88,6 @@ class VoiceRobotApp {
                 if (vadPill) vadPill.classList.add('active');
                 micStatus.textContent = '🟢 손 없이 상시 듣는 중... 언제든 말씀하세요!';
                 micStatus.classList.add('active');
-
-                // If start overlay is still visible and mic is active, auto dismiss!
-                const startOverlay = document.getElementById('start-overlay');
-                if (startOverlay && !startOverlay.classList.contains('hidden')) {
-                    this.startExperience();
-                }
             } else {
                 micBtn.classList.remove('listening');
                 if (vadPill) vadPill.classList.remove('active');
@@ -177,13 +175,31 @@ class VoiceRobotApp {
         const helpModal = document.getElementById('help-modal');
         const btnSpeed = document.getElementById('btn-speed');
 
-        // Start overlay trigger
+        // Start overlay trigger with touch support
+        const handleStart = (e) => {
+            if (e && e.type === 'touchend') {
+                e.preventDefault();
+            }
+            this.startExperience();
+        };
+
         if (btnStartExp) {
-            btnStartExp.addEventListener('click', () => this.startExperience());
+            btnStartExp.addEventListener('click', handleStart);
+            btnStartExp.addEventListener('touchend', handleStart);
         }
         if (startOverlay) {
-            startOverlay.addEventListener('click', () => this.startExperience());
+            startOverlay.addEventListener('click', handleStart);
+            startOverlay.addEventListener('touchend', handleStart);
         }
+
+        // Global touch / click listener to keep Web Audio API unlocked on mobile tablets
+        const resumeAudio = () => {
+            if (window.soundManager && window.soundManager.ctx && window.soundManager.ctx.state === 'suspended') {
+                window.soundManager.ctx.resume().catch(() => {});
+            }
+        };
+        window.addEventListener('touchstart', resumeAudio, { passive: true });
+        window.addEventListener('click', resumeAudio, { passive: true });
 
         // Speed Toggle Button (1.1x -> 1.35x -> 1.55x)
         const speeds = [

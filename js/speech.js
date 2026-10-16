@@ -134,16 +134,12 @@ class SpeechController {
         this.speechToken = 0;
         this.speakTimeout = null;
 
-        // Hands-Free & Permission Persistence
-        this.micStream = null;
-        this.audioContext = null;
-        this.analyser = null;
-        this.volumeDataArray = null;
-        this.isAudioMonitoring = false;
+        // Hands-Free & Speech State
+        this.volumeAnimId = null;
+        this.isUserSpeaking = false;
         this.shouldKeepListening = true;
         this.isStarting = false;
         this.restartTimer = null;
-        this.permissionRequested = false;
 
         // Callbacks
         this.onInterimResult = null;   // (text) => {}
@@ -171,7 +167,28 @@ class SpeechController {
             this.audioPlayer = document.getElementById('robot-audio-player');
         }
 
-        // 1. Silent unlock of DOM Audio element
+        // 1. Ensure SoundManager is initialized and context resumed
+        if (window.soundManager) {
+            window.soundManager.init();
+            if (window.soundManager.ctx) {
+                if (window.soundManager.ctx.state === 'suspended') {
+                    window.soundManager.ctx.resume().catch(() => {});
+                }
+                // Play silent frame to fully unlock Web Audio API on iOS Safari / Android Chrome
+                try {
+                    const ctx = window.soundManager.ctx;
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    gain.gain.value = 0;
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(0);
+                    osc.stop(ctx.currentTime + 0.001);
+                } catch (e) {}
+            }
+        }
+
+        // 2. Silent unlock of DOM Audio element
         if (this.audioPlayer) {
             try {
                 this.audioPlayer.play().then(() => {
@@ -180,25 +197,24 @@ class SpeechController {
             } catch (e) {}
         }
 
-        // 2. Resume Web Audio API context
-        if (window.soundManager && window.soundManager.ctx) {
-            if (window.soundManager.ctx.state === 'suspended') {
-                window.soundManager.ctx.resume().catch(() => {});
-            }
-        }
-
-        // 3. Preload all robot voice audio files in the background
+        // 3. Preload core and all robot voice audio files in the background
         this.preloadAudioCache();
     }
 
     /**
-     * Asynchronously preloads all 56 MP3 files into memory/buffers for instant playback
+     * Asynchronously preloads all MP3 files into memory/buffers for instant playback
      */
     async preloadAudioCache() {
-        const uniqueKeys = Array.from(new Set(Object.values(this.audioFileMap)));
+        const priorityKeys = [
+            'intro', 'intro_short', 'greet', 'wake', 'next_student',
+            'box_desk', 'done_box_desk', 'bear_box', 'done_bear_box',
+            'ball_bed', 'done_ball_bed', 'clean', 'done_clean', 'dance', 'praise'
+        ];
+        const allKeys = Array.from(new Set(Object.values(this.audioFileMap)));
+        const sortedKeys = Array.from(new Set([...priorityKeys, ...allKeys]));
         const ctx = window.soundManager ? window.soundManager.ctx : null;
 
-        for (const key of uniqueKeys) {
+        for (const key of sortedKeys) {
             const url = `audio_cache/${key}.mp3`;
             if (this.audioBufferCache[key]) continue;
 
@@ -239,71 +255,41 @@ class SpeechController {
     }
 
     /**
-     * Request microphone permission once.
+     * Smooth Volume Simulation based on STT events (eliminates getUserMedia / Call Volume issues)
      */
-    async requestPersistentPermission() {
-        if (this.permissionRequested && this.micStream) {
-            return true;
-        }
-        this.permissionRequested = true;
-
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            return false;
-        }
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
-            });
-
-            this.micStream = stream;
-            this.setupAudioAnalyser(stream);
-            return true;
-        } catch (err) {
-            console.warn('Microphone permission info:', err);
-            return false;
-        }
+    startVolumeSimulation(isIdle = true) {
+        if (this.volumeAnimId) cancelAnimationFrame(this.volumeAnimId);
+        let step = 0;
+        const animate = () => {
+            if (!this.isListening) {
+                if (this.onVolumeLevel) this.onVolumeLevel(0);
+                return;
+            }
+            step += 0.15;
+            let lvl = 0;
+            if (this.isUserSpeaking) {
+                // Natural speech fluctuations: 40% ~ 85%
+                lvl = 45 + Math.sin(step * 3.1) * 20 + Math.sin(step * 7.3) * 15;
+            } else {
+                // Gentle resting pulse: 6% ~ 14% to indicate live mic
+                lvl = 10 + Math.sin(step) * 4;
+            }
+            if (this.onVolumeLevel) {
+                this.onVolumeLevel(Math.round(lvl));
+            }
+            this.volumeAnimId = requestAnimationFrame(animate);
+        };
+        this.volumeAnimId = requestAnimationFrame(animate);
     }
 
-    setupAudioAnalyser(stream) {
-        try {
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            this.audioContext = new AudioCtx();
-            const source = this.audioContext.createMediaStreamSource(stream);
-
-            this.analyser = this.audioContext.createAnalyser();
-            this.analyser.fftSize = 256;
-            source.connect(this.analyser);
-
-            const bufferLength = this.analyser.frequencyBinCount;
-            this.volumeDataArray = new Uint8Array(bufferLength);
-            this.isAudioMonitoring = true;
-            this.monitorAudioLevel();
-        } catch (e) {
-            console.warn('Audio analyser setup error:', e);
+    stopVolumeSimulation() {
+        if (this.volumeAnimId) {
+            cancelAnimationFrame(this.volumeAnimId);
+            this.volumeAnimId = null;
         }
-    }
-
-    monitorAudioLevel() {
-        if (!this.isAudioMonitoring || !this.analyser) return;
-
-        this.analyser.getByteFrequencyData(this.volumeDataArray);
-        let sum = 0;
-        for (let i = 0; i < this.volumeDataArray.length; i++) {
-            sum += this.volumeDataArray[i];
-        }
-        const avg = sum / this.volumeDataArray.length;
-        const normalizedLevel = Math.min(100, Math.round((avg / 128) * 100));
-
         if (this.onVolumeLevel) {
-            this.onVolumeLevel(normalizedLevel);
+            this.onVolumeLevel(0);
         }
-
-        requestAnimationFrame(() => this.monitorAudioLevel());
     }
 
     /**
@@ -327,12 +313,22 @@ class SpeechController {
         this.recognition.onstart = () => {
             this.isListening = true;
             this.isStarting = false;
+            this.startVolumeSimulation(true);
             if (this.onListenStateChange) this.onListenStateChange(true);
         };
 
+        this.recognition.onspeechstart = () => {
+            this.isUserSpeaking = true;
+        };
+
+        this.recognition.onspeechend = () => {
+            this.isUserSpeaking = false;
+        };
+
         this.recognition.onresult = (event) => {
+            this.isUserSpeaking = true;
             // Discard recognition while robot is speaking or immediately after (prevent self-echo)
-            if (this.isSpeaking || (Date.now() - this.lastSpeakEndTime < 350)) {
+            if (this.isSpeaking || (Date.now() - this.lastSpeakEndTime < 500)) {
                 this.speechBuffer = '';
                 return;
             }
@@ -372,7 +368,12 @@ class SpeechController {
 
             if (event.error === 'not-allowed') {
                 this.isListening = false;
+                this.shouldKeepListening = false;
+                this.stopVolumeSimulation();
                 if (this.onListenStateChange) this.onListenStateChange(false);
+                if (this.onError) {
+                    this.onError('마이크 권한이 허용되지 않았습니다. 브라우저 주소창 왼쪽의 자물쇠 또는 설정 아이콘을 눌러 마이크를 "허용"해 주세요.');
+                }
                 return;
             }
         };
@@ -380,6 +381,8 @@ class SpeechController {
         this.recognition.onend = () => {
             this.isListening = false;
             this.isStarting = false;
+            this.isUserSpeaking = false;
+            this.stopVolumeSimulation();
             if (this.onListenStateChange) this.onListenStateChange(false);
 
             if (this.shouldKeepListening) {
@@ -507,10 +510,6 @@ class SpeechController {
 
         this.isStarting = true;
 
-        if (!this.permissionRequested) {
-            this.requestPersistentPermission();
-        }
-
         try {
             this.recognition.start();
             return true;
@@ -523,6 +522,8 @@ class SpeechController {
     stopListening() {
         this.shouldKeepListening = false;
         this.isStarting = false;
+        this.isUserSpeaking = false;
+        this.stopVolumeSimulation();
         clearTimeout(this.restartTimer);
         clearTimeout(this.evalTimer);
         this.speechBuffer = '';
@@ -721,40 +722,62 @@ class SpeechController {
         this.stopSpeaking();
         const currentToken = this.speechToken;
 
-        return new Promise((resolve) => {
+        return new Promise(async (resolve) => {
             const cacheKeyMatch = src.match(/audio_cache\/(.+)\.mp3$/);
             const cacheKey = cacheKeyMatch ? cacheKeyMatch[1] : null;
 
             // Method 1: Web Audio API Buffer Playback (Zero-lag, 100% bypasses Autoplay blocks)
             const ctx = window.soundManager ? window.soundManager.ctx : null;
-            if (ctx && cacheKey && this.audioBufferCache[cacheKey]) {
-                try {
-                    const source = ctx.createBufferSource();
-                    source.buffer = this.audioBufferCache[cacheKey];
-                    source.playbackRate.value = 1.05 * (this.speedMultiplier || 1.0);
-                    source.connect(ctx.destination);
+            if (ctx) {
+                if (ctx.state === 'suspended') {
+                    try { await ctx.resume(); } catch (e) {}
+                }
 
-                    this.currentBufferSource = source;
-                    this.isSpeaking = true;
-                    if (this.onSpeakStart) this.onSpeakStart();
-
-                    source.onended = () => {
-                        if (this.speechToken !== currentToken) {
-                            resolve(false);
-                            return;
+                // If not in cache yet, fetch and decode immediately!
+                if (cacheKey && !this.audioBufferCache[cacheKey]) {
+                    try {
+                        const resp = await fetch(src);
+                        if (resp.ok) {
+                            const arr = await resp.arrayBuffer();
+                            const decoded = await new Promise((res, rej) => {
+                                ctx.decodeAudioData(arr, res, rej);
+                            });
+                            this.audioBufferCache[cacheKey] = decoded;
                         }
-                        this.currentBufferSource = null;
-                        this.isSpeaking = false;
-                        this.lastSpeakEndTime = Date.now();
-                        if (this.onSpeakEnd) this.onSpeakEnd();
-                        if (onComplete) onComplete();
-                        resolve(true);
-                    };
+                    } catch (e) {
+                        console.warn('On-demand audio decode failed:', e);
+                    }
+                }
 
-                    source.start(0);
-                    return;
-                } catch (e) {
-                    console.warn('Web Audio buffer playback error, using audio player fallback:', e);
+                if (cacheKey && this.audioBufferCache[cacheKey]) {
+                    try {
+                        const source = ctx.createBufferSource();
+                        source.buffer = this.audioBufferCache[cacheKey];
+                        source.playbackRate.value = 1.05 * (this.speedMultiplier || 1.0);
+                        source.connect(ctx.destination);
+
+                        this.currentBufferSource = source;
+                        this.isSpeaking = true;
+                        if (this.onSpeakStart) this.onSpeakStart();
+
+                        source.onended = () => {
+                            if (this.speechToken !== currentToken) {
+                                resolve(false);
+                                return;
+                            }
+                            this.currentBufferSource = null;
+                            this.isSpeaking = false;
+                            this.lastSpeakEndTime = Date.now();
+                            if (this.onSpeakEnd) this.onSpeakEnd();
+                            if (onComplete) onComplete();
+                            resolve(true);
+                        };
+
+                        source.start(0);
+                        return;
+                    } catch (e) {
+                        console.warn('Web Audio buffer playback error, using audio player fallback:', e);
+                    }
                 }
             }
 

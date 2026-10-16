@@ -6,7 +6,7 @@ class SoundManager {
     constructor() {
         this.ctx = null;
         this.muted = false;
-        this.masterVolume = 0.5;
+        this.masterVolume = 1.0;
     }
 
     init() {
