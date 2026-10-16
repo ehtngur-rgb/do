@@ -525,17 +525,16 @@ class VoiceRobotApp {
             return;
         }
 
-        // Notify Quest Manager of command invocation
-        if (this.questManager) {
-            this.questManager.checkCommand(intent, 'start');
-        }
-
         switch (intent.type) {
             case 'WAKE_WORD':
                 this.robot.setExpression('surprised');
                 if (window.soundManager) window.soundManager.play('button');
                 this.handleRobotResponse(intent.reply, () => {
-                    this.robot.wave();
+                    this.robot.wave(() => {
+                        if (this.questManager) {
+                            this.questManager.checkCommand(intent, 'done');
+                        }
+                    });
                 });
                 break;
 
@@ -544,11 +543,11 @@ class VoiceRobotApp {
                 break;
 
             case 'LIGHT_ON':
-                this.executeLightCommand(true, intent.reply);
+                this.executeLightCommand(true, intent.reply, intent);
                 break;
 
             case 'LIGHT_OFF':
-                this.executeLightCommand(false, intent.reply);
+                this.executeLightCommand(false, intent.reply, intent);
                 break;
 
             case 'GREET':
@@ -565,6 +564,11 @@ class VoiceRobotApp {
                 this.handleRobotResponse(intent.reply, () => {
                     this.robot.dance(() => {
                         this.isProcessingCommand = false;
+                        setTimeout(() => {
+                            if (this.questManager) {
+                                this.questManager.checkCommand(intent, 'done');
+                            }
+                        }, 600);
                     });
                 });
                 break;
@@ -657,14 +661,27 @@ class VoiceRobotApp {
         });
     }
 
-    executeLightCommand(isOn, replyMsg) {
+    executeLightCommand(isOn, replyMsg, intent = null) {
         this.isProcessingCommand = true;
-        // Wait until speech finishes before switching lamp and cheering
+        // 1. Robot speaks the response ("네! 방 불을 끌게요. 굿나잇!")
         this.handleRobotResponse(replyMsg, () => {
+            // 2. Play light switch click sound
             if (window.soundManager) window.soundManager.play('lightSwitch');
+
+            // 3. Switch lamp and room lighting (dark night mode / bright daylight mode)
             this.world.setLamp(isOn);
+
+            // 4. Robot cheers / reacts
             this.robot.cheer(() => {
                 this.isProcessingCommand = false;
+
+                // 5. Allow student to clearly observe the room lights turned off for 1.5 seconds
+                // before triggering quest completion fanfare and victory modal!
+                setTimeout(() => {
+                    if (this.questManager && intent) {
+                        this.questManager.checkCommand(intent, 'done');
+                    }
+                }, 1500);
             });
         });
     }

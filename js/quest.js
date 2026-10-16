@@ -97,11 +97,11 @@ class QuestManager {
         });
     }
 
-    checkCommand(intent, stage = 'start') {
+    checkCommand(intent, stage = 'done') {
         if (!intent) return;
         let matchedQuest = null;
 
-        if (intent.type === 'WAKE_WORD' && stage === 'start') {
+        if (intent.type === 'WAKE_WORD' && stage === 'done') {
             matchedQuest = this.quests.find(q => q.id === 'wake');
         } else if (intent.type === 'MOVE' && (stage === 'done' || stage === 'already')) {
             if (intent.item === 'box' && intent.destination === 'desk') {
@@ -113,7 +113,7 @@ class QuestManager {
             } else if (intent.item === 'book' && intent.destination === 'shelf') {
                 matchedQuest = this.quests.find(q => q.id === 'book_shelf');
             }
-        } else if ((intent.type === 'DANCE' || intent.type === 'LIGHT_OFF' || intent.type === 'LIGHT_ON') && stage === 'start') {
+        } else if ((intent.type === 'DANCE' || intent.type === 'LIGHT_OFF' || intent.type === 'LIGHT_ON') && stage === 'done') {
             matchedQuest = this.quests.find(q => q.id === 'fun_action');
         }
 
