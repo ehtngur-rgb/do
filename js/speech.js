@@ -293,6 +293,47 @@ class SpeechController {
     }
 
     /**
+     * Eliminates consecutive duplicate words or multi-word repeated phrases
+     * e.g. "상자를 상자를 상자를" -> "상자를"
+     */
+    deduplicateWords(text) {
+        if (!text) return '';
+        const cleaned = text.trim().replace(/\s+/g, ' ');
+        if (!cleaned) return '';
+
+        // 1. Single-word consecutive duplicate removal
+        const tokens = cleaned.split(' ');
+        const resultTokens = [];
+        for (let i = 0; i < tokens.length; i++) {
+            if (resultTokens.length === 0 || resultTokens[resultTokens.length - 1] !== tokens[i]) {
+                resultTokens.push(tokens[i]);
+            }
+        }
+        let deduped = resultTokens.join(' ');
+
+        // 2. 2-gram phrase duplicate removal (e.g. "상자 위에 상자 위에" -> "상자 위에")
+        const words = deduped.split(' ');
+        if (words.length >= 4) {
+            const out = [];
+            let i = 0;
+            while (i < words.length) {
+                if (i + 3 < words.length && 
+                    words[i] === words[i + 2] && 
+                    words[i + 1] === words[i + 3]) {
+                    out.push(words[i], words[i + 1]);
+                    i += 4;
+                } else {
+                    out.push(words[i]);
+                    i++;
+                }
+            }
+            deduped = out.join(' ');
+        }
+
+        return deduped;
+    }
+
+    /**
      * Initialize Web Speech API STT with Smart Non-Chopping Utterance Aggregation
      */
     initSTT() {
@@ -329,40 +370,39 @@ class SpeechController {
             this.isUserSpeaking = true;
             // Discard recognition while robot is speaking or immediately after (prevent self-echo)
             if (this.isSpeaking || (Date.now() - this.lastSpeakEndTime < 500)) {
-                this.speechBuffer = '';
                 return;
             }
 
+            let fullFinalText = '';
             let interimText = '';
-            let newFinalText = '';
+            let hasFinal = false;
 
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
+            for (let i = 0; i < event.results.length; ++i) {
                 const res = event.results[i];
                 const transcript = res[0].transcript;
                 if (res.isFinal) {
-                    newFinalText += ' ' + transcript;
+                    fullFinalText += ' ' + transcript;
+                    hasFinal = true;
                 } else {
                     interimText += ' ' + transcript;
                 }
             }
 
-            if (newFinalText.trim()) {
-                this.speechBuffer = (this.speechBuffer + ' ' + newFinalText).trim();
-            }
-
-            const currentCandidate = (this.speechBuffer + ' ' + interimText).trim();
+            // Build full candidate directly from current session results (never accumulates indefinitely)
+            let currentCandidate = (fullFinalText + ' ' + interimText).trim();
+            currentCandidate = this.deduplicateWords(currentCandidate);
 
             if (currentCandidate && this.onInterimResult) {
                 this.onInterimResult(currentCandidate);
             }
 
             // Smart evaluate candidate text without prematurely failing on pauses
-            this.evaluateSpeechInput(currentCandidate, !!newFinalText.trim());
+            this.evaluateSpeechInput(currentCandidate, hasFinal);
         };
 
         this.recognition.onerror = (event) => {
             this.isStarting = false;
-            if (event.error === 'no-speech' || event.error === 'aborted') {
+            if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'audio-capture') {
                 return;
             }
 
@@ -387,6 +427,10 @@ class SpeechController {
 
             if (this.shouldKeepListening) {
                 clearTimeout(this.restartTimer);
+                // If robot is currently speaking, wait until speak ends
+                if (this.isSpeaking) {
+                    return;
+                }
                 this.restartTimer = setTimeout(() => {
                     this.startListening();
                 }, 250);
@@ -466,8 +510,15 @@ class SpeechController {
         clearTimeout(this.evalTimer);
         this.evalTimer = null;
 
-        const finalCommand = text.trim();
-        this.speechBuffer = ''; // Reset buffer for next utterance
+        const finalCommand = this.deduplicateWords(text).trim();
+
+        // Stop current recognition session so robot's own voice isn't captured
+        // and next student command starts with completely fresh event.results
+        if (this.recognition && this.isListening) {
+            try {
+                this.recognition.stop();
+            } catch (e) {}
+        }
 
         if (this.onFinalResult && finalCommand) {
             this.onFinalResult(finalCommand);
@@ -504,7 +555,7 @@ class SpeechController {
 
         this.shouldKeepListening = true;
 
-        if (this.isListening || this.isStarting) {
+        if (this.isListening || this.isStarting || this.isSpeaking) {
             return true;
         }
 
@@ -515,6 +566,10 @@ class SpeechController {
             return true;
         } catch (e) {
             this.isStarting = false;
+            if (e.name === 'InvalidStateError') {
+                this.isListening = true;
+                return true;
+            }
             return false;
         }
     }
@@ -526,13 +581,46 @@ class SpeechController {
         this.stopVolumeSimulation();
         clearTimeout(this.restartTimer);
         clearTimeout(this.evalTimer);
-        this.speechBuffer = '';
 
         if (this.recognition && this.isListening) {
             try {
                 this.recognition.stop();
             } catch (e) {}
         }
+    }
+
+    pauseForBackground() {
+        clearTimeout(this.restartTimer);
+        clearTimeout(this.evalTimer);
+        if (this.recognition) {
+            try {
+                this.recognition.abort();
+            } catch (e) {}
+        }
+        this.isListening = false;
+        this.isStarting = false;
+        this.isUserSpeaking = false;
+        this.stopVolumeSimulation();
+        if (this.onListenStateChange) this.onListenStateChange(false);
+    }
+
+    resumeFromBackground() {
+        this.shouldKeepListening = true;
+        this.isStarting = false;
+        clearTimeout(this.restartTimer);
+
+        if (this.recognition) {
+            try {
+                this.recognition.abort();
+            } catch (e) {}
+        }
+
+        // Wait 300ms for hardware audio driver to re-bind on screen wake
+        setTimeout(() => {
+            if (this.shouldKeepListening && !this.isListening && !this.isSpeaking) {
+                this.startListening();
+            }
+        }, 300);
     }
 
     toggleListening() {
@@ -715,6 +803,20 @@ class SpeechController {
         this.speakWebSpeech(trimmed, onComplete, token);
     }
 
+    notifySpeakEnded() {
+        this.isSpeaking = false;
+        this.lastSpeakEndTime = Date.now();
+        if (this.onSpeakEnd) this.onSpeakEnd();
+
+        // Automatically resume speech recognition after robot speech finishes
+        if (this.shouldKeepListening && !this.isListening && !this.isStarting) {
+            clearTimeout(this.restartTimer);
+            this.restartTimer = setTimeout(() => {
+                this.startListening();
+            }, 300);
+        }
+    }
+
     /**
      * Robust Audio Playback using Web Audio API buffer sources or unlocked DOM player
      */
@@ -766,9 +868,7 @@ class SpeechController {
                                 return;
                             }
                             this.currentBufferSource = null;
-                            this.isSpeaking = false;
-                            this.lastSpeakEndTime = Date.now();
-                            if (this.onSpeakEnd) this.onSpeakEnd();
+                            this.notifySpeakEnded();
                             if (onComplete) onComplete();
                             resolve(true);
                         };
@@ -797,9 +897,7 @@ class SpeechController {
                 player.onerror = null;
                 if (this.currentAudio === player) {
                     this.currentAudio = null;
-                    this.isSpeaking = false;
-                    this.lastSpeakEndTime = Date.now();
-                    if (this.onSpeakEnd) this.onSpeakEnd();
+                    this.notifySpeakEnded();
                 }
             };
 
@@ -868,17 +966,13 @@ class SpeechController {
 
             utterance.onend = () => {
                 if (this.speechToken !== token) return;
-                this.isSpeaking = false;
-                this.lastSpeakEndTime = Date.now();
-                if (this.onSpeakEnd) this.onSpeakEnd();
+                this.notifySpeakEnded();
                 if (onComplete) onComplete();
             };
 
             utterance.onerror = () => {
                 if (this.speechToken !== token) return;
-                this.isSpeaking = false;
-                this.lastSpeakEndTime = Date.now();
-                if (this.onSpeakEnd) this.onSpeakEnd();
+                this.notifySpeakEnded();
                 if (onComplete) onComplete();
             };
 

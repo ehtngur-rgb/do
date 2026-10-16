@@ -9,6 +9,8 @@ class VoiceRobotApp {
         this.clock = new THREE.Clock();
         this.isProcessingCommand = false;
         this.isAppStarted = false;
+        this.wakeLock = null;
+        this.resumeTimer = null;
 
         this.init();
     }
@@ -25,9 +27,11 @@ class VoiceRobotApp {
         // Bind UI & Foot Switch Events
         this.setupUIEvents();
 
+        // Bind Screen Lock & Lifecycle Events
+        this.setupLifecycleHandlers();
+
         // Start 3D Animation Loop
         this.animate();
-
     }
 
     /**
@@ -42,6 +46,9 @@ class VoiceRobotApp {
         if (startOverlay) {
             startOverlay.classList.add('hidden');
         }
+
+        // 0. Request screen wake lock so tablet doesn't sleep while student is speaking
+        this.requestScreenWakeLock();
 
         // 1. Initialize sound system and resume Web Audio immediately
         if (window.soundManager) {
@@ -410,6 +417,62 @@ class VoiceRobotApp {
                     }
                 });
             }
+        }
+    }
+
+    setupLifecycleHandlers() {
+        // 1. Visibility change (Screen lock / power button / app switch)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this.handleAppResume();
+            } else {
+                this.handleAppSleep();
+            }
+        });
+
+        // 2. Focus and page show
+        window.addEventListener('focus', () => this.handleAppResume());
+        window.addEventListener('pageshow', () => this.handleAppResume());
+    }
+
+    handleAppSleep() {
+        if (window.speechController) {
+            window.speechController.pauseForBackground();
+        }
+    }
+
+    handleAppResume() {
+        if (!this.isAppStarted) return;
+
+        // 1. Re-acquire screen wake lock if supported
+        this.requestScreenWakeLock();
+
+        // 2. Resume Web Audio API context
+        if (window.soundManager && window.soundManager.ctx) {
+            if (window.soundManager.ctx.state === 'suspended' || window.soundManager.ctx.state === 'interrupted') {
+                window.soundManager.ctx.resume().catch(() => {});
+            }
+        }
+
+        // 3. Resume speech recognition
+        if (window.speechController) {
+            clearTimeout(this.resumeTimer);
+            this.resumeTimer = setTimeout(() => {
+                window.speechController.resumeFromBackground();
+            }, 350);
+        }
+    }
+
+    async requestScreenWakeLock() {
+        try {
+            if ('wakeLock' in navigator && !this.wakeLock) {
+                this.wakeLock = await navigator.wakeLock.request('screen');
+                this.wakeLock.addEventListener('release', () => {
+                    this.wakeLock = null;
+                });
+            }
+        } catch (e) {
+            // Gracefully ignore if not supported
         }
     }
 
