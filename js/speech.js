@@ -141,9 +141,13 @@ class SpeechController {
         this.isStarting = false;
         this.restartTimer = null;
 
+        // Speech state & transcription progress
+        this.isTranscribing = false;
+
         // Callbacks
-        this.onInterimResult = null;   // (text) => {}
+        this.onInterimResult = null;   // (text, isComplete) => {}
         this.onFinalResult = null;     // (text) => {}
+        this.onUserSpeechStart = null; // () => {} (Instant vocal onset feedback)
         this.onListenStateChange = null; // (boolean) => {}
         this.onVolumeLevel = null;     // (level 0~100) => {}
         this.onSpeakStart = null;      // () => {}
@@ -358,9 +362,17 @@ class SpeechController {
             if (this.onListenStateChange) this.onListenStateChange(true);
         };
 
-        this.recognition.onspeechstart = () => {
+        const handleUserSpeechDetected = () => {
             this.isUserSpeaking = true;
+            if (!this.isSpeaking && (Date.now() - this.lastSpeakEndTime >= 200)) {
+                if (this.onUserSpeechStart && !this.isTranscribing) {
+                    this.onUserSpeechStart();
+                }
+            }
         };
+
+        this.recognition.onspeechstart = handleUserSpeechDetected;
+        this.recognition.onsoundstart = handleUserSpeechDetected;
 
         this.recognition.onspeechend = () => {
             this.isUserSpeaking = false;
@@ -369,7 +381,7 @@ class SpeechController {
         this.recognition.onresult = (event) => {
             this.isUserSpeaking = true;
             // Discard recognition while robot is speaking or immediately after (prevent self-echo)
-            if (this.isSpeaking || (Date.now() - this.lastSpeakEndTime < 500)) {
+            if (this.isSpeaking || (Date.now() - this.lastSpeakEndTime < 200)) {
                 return;
             }
 
@@ -392,8 +404,13 @@ class SpeechController {
             let currentCandidate = (fullFinalText + ' ' + interimText).trim();
             currentCandidate = this.deduplicateWords(currentCandidate);
 
-            if (currentCandidate && this.onInterimResult) {
-                this.onInterimResult(currentCandidate);
+            if (currentCandidate) {
+                this.isTranscribing = true;
+                if (this.onInterimResult) {
+                    const intent = window.nluParser ? window.nluParser.parse(currentCandidate) : null;
+                    const isComplete = Boolean(intent && intent.hasEndingVerb);
+                    this.onInterimResult(currentCandidate, isComplete);
+                }
             }
 
             // Smart evaluate candidate text without prematurely failing on pauses
@@ -422,6 +439,7 @@ class SpeechController {
             this.isListening = false;
             this.isStarting = false;
             this.isUserSpeaking = false;
+            this.isTranscribing = false;
             this.stopVolumeSimulation();
             if (this.onListenStateChange) this.onListenStateChange(false);
 
@@ -433,7 +451,7 @@ class SpeechController {
                 }
                 this.restartTimer = setTimeout(() => {
                     this.startListening();
-                }, 250);
+                }, 120);
             }
         };
     }
@@ -460,9 +478,9 @@ class SpeechController {
             // (e.g. "상자를 책상으로 옮겨줘", "인형을 상자에 올려줘", "불 켜줘", "신나게 춤춰줘")
             if (intent.hasEndingVerb) {
                 clearTimeout(this.evalTimer);
-                // When browser speech engine finalized the utterance chunk, wait 280ms
-                // If interim, wait 450ms of quiet pause after speaking the verb
-                const waitTime = hasFinalChunk ? 280 : 450;
+                // When browser speech engine finalized the utterance chunk, wait 100ms
+                // If interim, wait 260ms of quiet pause after speaking the verb
+                const waitTime = hasFinalChunk ? 100 : 260;
                 this.evalTimer = setTimeout(() => {
                     this.commitCommand(candidateText);
                 }, waitTime);
@@ -486,10 +504,10 @@ class SpeechController {
         // Case 3: Wake Word ("로보야!", "로봇아!")
         if (intent.type === 'WAKE_WORD') {
             clearTimeout(this.evalTimer);
-            // Wait 800ms to allow multi-part phrases ("로봇아! (pause) 상자 책상에 옮겨줘")
+            // Wait 600ms to allow multi-part phrases ("로봇아! (pause) 상자 책상에 옮겨줘")
             this.evalTimer = setTimeout(() => {
                 this.commitCommand(candidateText);
-            }, 800);
+            }, 600);
             return;
         }
 
@@ -498,7 +516,7 @@ class SpeechController {
         if (hasFinalChunk) {
             this.evalTimer = setTimeout(() => {
                 this.commitCommand(candidateText);
-            }, 1200);
+            }, 1000);
         }
     }
 
@@ -509,6 +527,7 @@ class SpeechController {
         if (!text || this.isSpeaking) return;
         clearTimeout(this.evalTimer);
         this.evalTimer = null;
+        this.isTranscribing = false;
 
         const finalCommand = this.deduplicateWords(text).trim();
 
@@ -813,7 +832,7 @@ class SpeechController {
             clearTimeout(this.restartTimer);
             this.restartTimer = setTimeout(() => {
                 this.startListening();
-            }, 300);
+            }, 80);
         }
     }
 

@@ -474,8 +474,8 @@ main.main-viewport {
     line-height: 1.45;
     box-shadow: var(--shadow-soft);
     opacity: 0;
-    transform: translateY(-8px);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateY(-6px);
+    transition: opacity 0.12s ease-out, transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
     backdrop-filter: blur(8px);
 }
 
@@ -486,10 +486,11 @@ main.main-viewport {
 
 .user-box {
     align-self: flex-end;
-    background: rgba(59, 130, 246, 0.92);
+    background: rgba(59, 130, 246, 0.94);
     color: #ffffff;
     font-weight: 600;
     border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
 }
 
 .robot-box {

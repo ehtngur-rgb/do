@@ -122,9 +122,17 @@ class VoiceRobotApp {
             }
         };
 
-        // Interim recognized speech (realtime transcription)
-        speech.onInterimResult = (text) => {
-            userSubtitle.textContent = `"${text}..."`;
+        // Instant user speech detection (immediate 0ms visual feedback on vocal onset)
+        speech.onUserSpeechStart = () => {
+            if (!speech.isTranscribing) {
+                userSubtitle.textContent = '"말씀을 듣고 있어요..."';
+                userSubtitle.classList.add('active');
+            }
+        };
+
+        // Interim recognized speech (realtime transcription as words are spoken)
+        speech.onInterimResult = (text, isComplete) => {
+            userSubtitle.textContent = isComplete ? `"${text}"` : `"${text}..."`;
             userSubtitle.classList.add('active');
         };
 
